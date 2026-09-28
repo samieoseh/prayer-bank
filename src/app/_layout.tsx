@@ -1,6 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "react-native";
+import { PaperProvider } from "react-native-paper";
 import "../global.css";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
@@ -12,8 +13,10 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
+      <PaperProvider>
+        <AnimatedSplashOverlay />
+        <AppTabs />
+      </PaperProvider>
     </ThemeProvider>
   );
 }

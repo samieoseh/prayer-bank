@@ -2,6 +2,7 @@ import { ThemedText } from "@/components/themed-text";
 import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
 import * as Device from "expo-device";
 import { Platform, StyleSheet, Text, View } from "react-native";
+import { Button } from "react-native-paper";
 
 function getDevMenuHint() {
   if (Platform.OS === "web") {
@@ -57,10 +58,20 @@ export default function HomeScreen() {
     //     {Platform.OS === "web" && <WebBadge />}
     //   </SafeAreaView>
     // </ThemedView>
-    <View className="flex-1 items-center justify-center bg-white">
+    <View
+      className="flex-1 items-center justify-center bg-black"
+      style={{ backgroundColor: "black" }}
+    >
       <Text className="text-xl font-bold text-blue-500">
         Welcome to Nativewind!
       </Text>
+      <Button
+        icon="camera"
+        mode="contained"
+        onPress={() => console.log("Pressed")}
+      >
+        Press me
+      </Button>
     </View>
   );
 }
