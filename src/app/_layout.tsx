@@ -1,22 +1,36 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
-import { useColorScheme } from "react-native";
-import { PaperProvider } from "react-native-paper";
-import "../global.css";
+import { Stack } from 'expo-router';
+import { PaperProvider } from 'react-native-paper';
 
-import { AnimatedSplashOverlay } from "@/components/animated-icon";
-import AppTabs from "@/components/app-tabs";
+import { AuthLoadingScreen } from '@/features/auth/components/auth-loading-screen';
+import { useAuth } from '@/features/auth/hooks/use-auth';
+import { AuthProvider } from '@/features/auth/providers/auth-provider';
 
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <PaperProvider>
-        <AnimatedSplashOverlay />
-        <AppTabs />
-      </PaperProvider>
-    </ThemeProvider>
+    <PaperProvider>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </PaperProvider>
+  );
+}
+
+function RootNavigator() {
+  const auth = useAuth();
+
+  if (auth.status === 'loading') {
+    return <AuthLoadingScreen />;
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Protected guard={auth.status === 'authenticated'}>
+        <Stack.Screen name="(app)" />
+      </Stack.Protected>
+      <Stack.Protected guard={auth.status === 'unauthenticated'}>
+        <Stack.Screen name="sign-in" />
+      </Stack.Protected>
+      <Stack.Screen name="auth/callback" />
+    </Stack>
   );
 }

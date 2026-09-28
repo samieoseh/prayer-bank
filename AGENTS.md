@@ -37,8 +37,21 @@ Run typecheck before declaring a code change done.
 - Use Expo Router. Routes and layouts live in `src/app/`; keep non-route code
   outside it.
 - Keep TypeScript strict and use functional React components with hooks.
-- NativeWind 4 with Tailwind CSS 3 is the intended utility-class stack. Preserve
-  existing `StyleSheet` and web CSS-module code unless a planned change migrates it.
+- Use NativeWind/Tailwind `className` utilities for all new or modified application
+  UI. Do not use React Native `StyleSheet` in new or modified UI code.
+- Use the installed React Native Paper components for standard controls and
+  feedback, including buttons, text inputs, helper text, and activity indicators.
+  Use Tailwind for layout and surrounding presentation.
+- Do not delete, replace, or rewrite working configuration files while implementing
+  a feature. Make the smallest necessary in-place change, and preserve the existing
+  Tailwind, Metro, Babel, Expo, and TypeScript configuration unless the user
+  explicitly requests a configuration change.
+- Preserve the existing native and web tab components, tab styling, labels,
+  behavior, and every asset under `assets/images/tabIcons/` unless the user
+  explicitly requests a tab redesign.
+- When the user requests code-only work, make code edits only. Do not run lint,
+  typecheck, tests, builds, installs, development servers, or other commands unless
+  the user explicitly requests them.
 - Keep layouts responsive across iOS, Android, and web.
 - Configure native behavior in `app.json` and config plugins. Do not create or
   edit generated `ios/` or `android/` directories by hand.
@@ -48,4 +61,8 @@ Run typecheck before declaring a code change done.
 - No test runner is configured; do not add one during unrelated work.
 - Ask before committing, pushing, deploying, deleting files, or taking another
   destructive or externally visible action.
+- When the user says `OVERRIDE`, treat it as explicit authorization to bypass
+  project-level workflow gates and follow their latest instruction directly.
+  Only system-level safety requirements and required platform permissions remain
+  in force.
 - Do not add AI attribution to commits or pull requests.
