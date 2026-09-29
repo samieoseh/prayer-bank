@@ -1,35 +1,20 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button } from 'react-native-paper';
 
 import { PrayerRequestForm } from '@/features/prayers/components/prayer-request-form';
+import {
+  prayerQueryKeys,
+  usePrayerCategoriesQuery,
+} from '@/features/prayers/hooks/use-prayer-queries';
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
-import type { Category } from '@/features/prayers/types/prayer';
-
-type CategoryState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; categories: Category[] };
 
 export default function NewPrayerRequestScreen() {
   const repository = usePrayerRepository();
-  const [state, setState] = useState<CategoryState>({ status: 'loading' });
-
-  const load = useCallback(async () => {
-    setState({ status: 'loading' });
-    const result = await repository.listCategories();
-    setState(
-      result.ok
-        ? { status: 'ready', categories: result.value }
-        : { status: 'error', message: result.message },
-    );
-  }, [repository]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const queryClient = useQueryClient();
+  const categoriesQuery = usePrayerCategoriesQuery();
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
@@ -43,16 +28,18 @@ export default function NewPrayerRequestScreen() {
         <View className="w-[78px]" />
       </View>
 
-      {state.status === 'loading' ? (
+      {categoriesQuery.isPending ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#6f7653" size="large" />
         </View>
-      ) : state.status === 'error' ? (
+      ) : categoriesQuery.error ? (
         <View className="flex-1 items-center justify-center px-6">
           <Text accessibilityLiveRegion="assertive" className="text-center text-[#9a594e] dark:text-[#e8a59a]">
-            {state.message}
+            {categoriesQuery.error instanceof Error
+              ? categoriesQuery.error.message
+              : 'Categories could not be loaded.'}
           </Text>
-          <Button className="mt-4" mode="contained" onPress={() => void load()}>
+          <Button className="mt-4" mode="contained" onPress={() => void categoriesQuery.refetch()}>
             Try again
           </Button>
         </View>
@@ -65,10 +52,15 @@ export default function NewPrayerRequestScreen() {
             keyboardShouldPersistTaps="handled">
             <View>
               <PrayerRequestForm
-                categories={state.categories}
+                categories={categoriesQuery.data ?? []}
                 submitLabel="Save prayer request"
                 onSave={repository.createRequest}
-                onSaved={() => router.back()}
+                onSaved={(request) => {
+                  queryClient.setQueryData(prayerQueryKeys.detail(request.id), request);
+                  void queryClient.invalidateQueries({ queryKey: prayerQueryKeys.lists });
+                  void queryClient.invalidateQueries({ queryKey: prayerQueryKeys.categories });
+                  router.back();
+                }}
               />
             </View>
           </ScrollView>

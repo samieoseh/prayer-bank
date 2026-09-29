@@ -1,58 +1,36 @@
-import { router, type Href, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { router, type Href } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button, Chip, IconButton } from 'react-native-paper';
 
-import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
-import type {
-  Category,
-  PrayerRequest,
-  PrayerRequestStatus,
-} from '@/features/prayers/types/prayer';
-
-type ListState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; requests: PrayerRequest[]; categories: Category[] };
+import {
+  prayerQueryKeys,
+  usePrayerCategoriesQuery,
+  usePrayerRequestsQuery,
+} from '@/features/prayers/hooks/use-prayer-queries';
 
 export default function PrayerBankScreen() {
-  const repository = usePrayerRepository();
-  const [requestStatus, setRequestStatus] = useState<PrayerRequestStatus>('active');
+  const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState<string>();
-  const [state, setState] = useState<ListState>({ status: 'loading' });
-
-  const load = useCallback(async () => {
-    setState({ status: 'loading' });
-    const [requests, categories] = await Promise.all([
-      repository.listRequests(requestStatus),
-      repository.listCategories(),
-    ]);
-
-    if (!requests.ok) {
-      setState({ status: 'error', message: requests.message });
-      return;
-    }
-    if (!categories.ok) {
-      setState({ status: 'error', message: categories.message });
-      return;
-    }
-
-    setState({ status: 'ready', requests: requests.value, categories: categories.value });
-  }, [repository, requestStatus]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+  const requestsQuery = usePrayerRequestsQuery('active');
+  const categoriesQuery = usePrayerCategoriesQuery();
+  const requests = requestsQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+  const isPending = requestsQuery.isPending || categoriesQuery.isPending;
+  const error = requestsQuery.error ?? categoriesQuery.error;
+  const refreshing =
+    !isPending && (requestsQuery.isFetching || categoriesQuery.isFetching);
 
   const visibleRequests = useMemo(() => {
-    if (state.status !== 'ready' || !categoryId) {
-      return state.status === 'ready' ? state.requests : [];
-    }
-    return state.requests.filter((request) => request.categoryId === categoryId);
-  }, [categoryId, state]);
+    if (!categoryId) return requests;
+    return requests.filter((request) => request.categoryId === categoryId);
+  }, [categoryId, requests]);
+
+  function reload() {
+    return Promise.all([requestsQuery.refetch(), categoriesQuery.refetch()]);
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
@@ -66,8 +44,8 @@ export default function PrayerBankScreen() {
             <View className="mb-[26px] flex-row items-start justify-between gap-4">
               <View className="flex-1">
                 <Text className="mb-2 text-xs font-bold uppercase tracking-[1.4px] text-[#59603f] dark:text-[#bbc49a]">
-                  {state.status === 'ready'
-                    ? `${visibleRequests.length} ${requestStatus} ${visibleRequests.length === 1 ? 'matter' : 'matters'}`
+                  {!isPending
+                    ? `${visibleRequests.length} active ${visibleRequests.length === 1 ? 'matter' : 'matters'}`
                     : 'Your private prayer space'}
                 </Text>
                 <Text
@@ -92,78 +70,68 @@ export default function PrayerBankScreen() {
               </View>
             </View>
 
-            <View className="mb-[26px] flex-row flex-wrap gap-2">
-              <Chip selected={requestStatus === 'active'} onPress={() => setRequestStatus('active')}>
-                Active
-              </Chip>
-              <Chip
-                selected={requestStatus === 'archived'}
-                onPress={() => setRequestStatus('archived')}>
-                Archived
-              </Chip>
-              {state.status === 'ready' ? (
-                <>
-                  <Chip selected={!categoryId} onPress={() => setCategoryId(undefined)}>
-                    All
+            <View className="mb-[26px]">
+              {categories.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  contentContainerClassName="gap-2 pr-[26px]"
+                  showsHorizontalScrollIndicator={false}>
+                  <Chip compact selected={!categoryId} onPress={() => setCategoryId(undefined)}>
+                    All categories
                   </Chip>
-                  {state.categories.map((category) => (
+                  {categories.map((category) => (
                     <Chip
+                      compact
                       key={category.id}
                       selected={categoryId === category.id}
                       onPress={() => setCategoryId(category.id)}>
                       {category.name}
                     </Chip>
                   ))}
-                </>
+                </ScrollView>
               ) : null}
             </View>
 
             <View className="flex-row items-baseline justify-between border-b border-[#ddd6c8] pb-2 dark:border-[#535548]">
               <Text className="text-base font-bold text-[#282923] dark:text-[#f4efe4]">
-                {requestStatus === 'active' ? 'Recently updated' : 'Archived matters'}
+                Recently updated
               </Text>
-              <Text className="text-xs text-[#747468] dark:text-[#c7c2b8]">
-                Offline on this device
-              </Text>
+              <View className="flex-row items-center gap-2">
+                {refreshing ? <ActivityIndicator size={12} /> : null}
+                <Text className="text-xs text-[#747468] dark:text-[#c7c2b8]">
+                  {refreshing ? 'Refreshing' : 'Offline on this device'}
+                </Text>
+              </View>
             </View>
           </>
         }
         ItemSeparatorComponent={() => <View className="h-px bg-[#ddd6c8] dark:bg-[#535548]" />}
         ListEmptyComponent={
-          state.status === 'loading' ? (
-            <View className="items-center py-16">
-              <ActivityIndicator color="#6f7653" size="large" />
-              <Text accessibilityLiveRegion="polite" className="mt-3 text-[#747468] dark:text-[#c7c2b8]">
-                Opening your prayer bank…
-              </Text>
-            </View>
-          ) : state.status === 'error' ? (
+          isPending ? (
+            <PrayerListSkeleton />
+          ) : error ? (
             <View className="items-center py-16">
               <Text accessibilityLiveRegion="assertive" className="text-center text-[#9a594e] dark:text-[#e8a59a]">
-                {state.message}
+                {error instanceof Error ? error.message : 'Prayer matters could not be loaded.'}
               </Text>
-              <Button className="mt-4" mode="contained" onPress={() => void load()}>
+              <Button className="mt-4" mode="contained" onPress={() => void reload()}>
                 Try again
               </Button>
             </View>
           ) : (
             <View className="items-center px-4 py-16">
               <Text accessibilityLiveRegion="polite" className="text-base font-bold text-[#282923] dark:text-[#f4efe4]">
-                {requestStatus === 'active' ? 'No active matters yet' : 'No archived matters'}
+                No active matters yet
               </Text>
               <Text className="mt-2 text-center text-[#747468] dark:text-[#c7c2b8]">
-                {requestStatus === 'active'
-                  ? 'Add what you want to remember before prayer.'
-                  : 'Matters you archive will rest here.'}
+                Add what you want to remember before prayer.
               </Text>
-              {requestStatus === 'active' ? (
-                <Button
-                  className="mt-5"
-                  mode="contained"
-                  onPress={() => router.push('/requests/new' as Href)}>
-                  Add prayer
-                </Button>
-              ) : null}
+              <Button
+                className="mt-5"
+                mode="contained"
+                onPress={() => router.push('/requests/new' as Href)}>
+                Add prayer
+              </Button>
             </View>
           )
         }
@@ -171,7 +139,10 @@ export default function PrayerBankScreen() {
           <Pressable
             accessibilityRole="button"
             className="min-h-[72px] flex-row items-center gap-3 py-4 active:opacity-70"
-            onPress={() => router.push(`/requests/${item.id}` as Href)}>
+            onPress={() => {
+              queryClient.setQueryData(prayerQueryKeys.detail(item.id), item);
+              router.push(`/requests/${item.id}` as Href);
+            }}>
             <View className="h-[9px] w-[9px] rounded-full bg-[#6f7653] dark:bg-[#bbc49a]" />
             <View className="min-w-0 flex-1">
               <Text className="text-base font-bold text-[#282923] dark:text-[#f4efe4]">
@@ -188,6 +159,24 @@ export default function PrayerBankScreen() {
         )}
       />
     </SafeAreaView>
+  );
+}
+
+function PrayerListSkeleton() {
+  return (
+    <View accessibilityLabel="Loading prayer matters" className="py-1">
+      {[0, 1, 2].map((item) => (
+        <View
+          className="min-h-[72px] flex-row items-center gap-3 border-b border-[#ddd6c8] py-4 dark:border-[#535548]"
+          key={item}>
+          <View className="h-[9px] w-[9px] rounded-full bg-[#ddd6c8] dark:bg-[#535548]" />
+          <View className="flex-1 gap-2">
+            <View className="h-4 w-2/3 rounded-full bg-[#e8e1d4] dark:bg-[#34362c]" />
+            <View className="h-3 w-1/3 rounded-full bg-[#eee7da] dark:bg-[#2d2f25]" />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 

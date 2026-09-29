@@ -27,6 +27,8 @@ Use `npx expo install <package>` for Expo and React Native dependencies.
 - iOS: `npm run ios`
 - Web: `npm run web`
 - Typecheck: `npx tsc --noEmit`
+- When the user asks for the command to rebuild the development client after a
+  native dependency change, give the EAS build command, not `expo run`.
 
 The existing lint script requires a separate ESLint setup before it can be used.
 No build, preview, test, browser-test, or combined Verify command is configured.

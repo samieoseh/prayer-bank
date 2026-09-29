@@ -1,49 +1,33 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button } from 'react-native-paper';
 
 import { PrayerRequestForm } from '@/features/prayers/components/prayer-request-form';
+import {
+  prayerQueryKeys,
+  usePrayerCategoriesQuery,
+  usePrayerRequestQuery,
+} from '@/features/prayers/hooks/use-prayer-queries';
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
-import type { Category, PrayerRequest } from '@/features/prayers/types/prayer';
-
-type EditState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; request: PrayerRequest; categories: Category[] };
 
 export default function EditPrayerRequestScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const requestId = Array.isArray(params.id) ? params.id[0] : params.id;
   const repository = usePrayerRepository();
-  const [state, setState] = useState<EditState>({ status: 'loading' });
-
-  const load = useCallback(async () => {
-    if (!requestId) {
-      setState({ status: 'error', message: 'That prayer request is no longer available.' });
-      return;
-    }
-
-    const [request, categories] = await Promise.all([
-      repository.getRequest(requestId),
-      repository.listCategories(),
-    ]);
-
-    if (!request.ok || !categories.ok) {
-      setState({
-        status: 'error',
-        message: !request.ok ? request.message : !categories.ok ? categories.message : '',
-      });
-      return;
-    }
-
-    setState({ status: 'ready', request: request.value, categories: categories.value });
-  }, [repository, requestId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const queryClient = useQueryClient();
+  const requestQuery = usePrayerRequestQuery(requestId);
+  const categoriesQuery = usePrayerCategoriesQuery();
+  const request = requestQuery.data;
+  const isPending = requestQuery.isPending || categoriesQuery.isPending;
+  const errorMessage = !requestId
+    ? 'That prayer request is no longer available.'
+    : requestQuery.error instanceof Error
+      ? requestQuery.error.message
+      : categoriesQuery.error instanceof Error
+        ? categoriesQuery.error.message
+        : undefined;
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
@@ -57,14 +41,14 @@ export default function EditPrayerRequestScreen() {
         <View className="w-[78px]" />
       </View>
 
-      {state.status === 'loading' ? (
+      {isPending ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color="#6f7653" size="large" />
         </View>
-      ) : state.status === 'error' ? (
+      ) : errorMessage || !request ? (
         <View className="flex-1 items-center justify-center px-[26px]">
           <Text accessibilityLiveRegion="assertive" className="text-center text-[#9a594e] dark:text-[#e8a59a]">
-            {state.message}
+            {errorMessage ?? 'That prayer request is no longer available.'}
           </Text>
           <Button className="mt-4" mode="contained" onPress={() => router.replace('/' as Href)}>
             Back to Prayer Bank
@@ -78,11 +62,19 @@ export default function EditPrayerRequestScreen() {
             contentContainerClassName="px-[26px] pb-[35px] pt-5"
             keyboardShouldPersistTaps="handled">
             <PrayerRequestForm
-              categories={state.categories}
-              initialRequest={state.request}
+              categories={categoriesQuery.data ?? []}
+              initialRequest={request}
               submitLabel="Save changes"
-              onSave={(draft) => repository.updateRequest(state.request.id, draft)}
-              onSaved={() => router.back()}
+              onSave={(draft) => repository.updateRequest(request.id, draft)}
+              onSaved={(updatedRequest) => {
+                queryClient.setQueryData(
+                  prayerQueryKeys.detail(updatedRequest.id),
+                  updatedRequest,
+                );
+                void queryClient.invalidateQueries({ queryKey: prayerQueryKeys.lists });
+                void queryClient.invalidateQueries({ queryKey: prayerQueryKeys.categories });
+                router.back();
+              }}
             />
           </ScrollView>
         </KeyboardAvoidingView>

@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
+import { useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 
@@ -6,19 +8,30 @@ import { AuthProvider } from '@/features/auth/providers/auth-provider';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { gcTime: Infinity, retry: false, staleTime: Infinity },
+        },
+      }),
+  );
+  const theme = colorScheme === 'dark' ? prayerBankDarkTheme : prayerBankLightTheme;
 
   return (
-    <PaperProvider theme={colorScheme === 'dark' ? prayerBankDarkTheme : prayerBankLightTheme}>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+    <PaperProvider theme={theme}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RootNavigator backgroundColor={theme.colors.background} />
+        </AuthProvider>
+      </QueryClientProvider>
     </PaperProvider>
   );
 }
 
-function RootNavigator() {
+function RootNavigator({ backgroundColor }: { backgroundColor: string }) {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ contentStyle: { backgroundColor }, headerShown: false }}>
       <Stack.Screen name="(app)" />
       <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
       <Stack.Screen name="auth/callback" />

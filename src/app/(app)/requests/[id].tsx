@@ -1,44 +1,25 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button, IconButton } from 'react-native-paper';
 
+import {
+  prayerQueryKeys,
+  usePrayerRequestQuery,
+} from '@/features/prayers/hooks/use-prayer-queries';
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
 import type { PrayerRequest } from '@/features/prayers/types/prayer';
-
-type DetailState =
-  | { status: 'loading' }
-  | { status: 'missing'; message: string }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; request: PrayerRequest };
 
 export default function PrayerDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const requestId = Array.isArray(params.id) ? params.id[0] : params.id;
   const repository = usePrayerRepository();
-  const [state, setState] = useState<DetailState>({ status: 'loading' });
+  const queryClient = useQueryClient();
+  const requestQuery = usePrayerRequestQuery(requestId);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<string>();
-
-  const load = useCallback(async () => {
-    if (!requestId) {
-      setState({ status: 'missing', message: 'That prayer request is no longer available.' });
-      return;
-    }
-
-    setState({ status: 'loading' });
-    const result = await repository.getRequest(requestId);
-    setState(
-      result.ok
-        ? { status: 'ready', request: result.value }
-        : { status: result.code === 'not-found' ? 'missing' : 'error', message: result.message },
-    );
-  }, [repository, requestId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   async function changeLifecycle(request: PrayerRequest) {
     if (pending) return;
@@ -51,28 +32,22 @@ export default function PrayerDetailScreen() {
     setPending(false);
 
     if (result.ok) {
+      queryClient.setQueryData(prayerQueryKeys.detail(result.value.id), result.value);
+      void queryClient.invalidateQueries({ queryKey: prayerQueryKeys.lists });
       router.back();
       return;
     }
     setFeedback(result.message);
   }
 
-  if (state.status === 'loading') {
-    return (
-      <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#6f7653" size="large" />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (state.status === 'missing' || state.status === 'error') {
+  if (!requestId || requestQuery.error) {
     return (
       <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
         <View className="flex-1 items-center justify-center px-[26px]">
           <Text accessibilityLiveRegion="assertive" className="text-center text-[#747468] dark:text-[#c7c2b8]">
-            {state.message}
+            {requestQuery.error instanceof Error
+              ? requestQuery.error.message
+              : 'That prayer request is no longer available.'}
           </Text>
           <Button className="mt-4" mode="contained" onPress={() => router.replace('/' as Href)}>
             Back to Prayer Bank
@@ -82,7 +57,17 @@ export default function PrayerDetailScreen() {
     );
   }
 
-  const request = state.request;
+  if (requestQuery.isPending || !requestQuery.data) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator color="#6f7653" size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const request = requestQuery.data;
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
