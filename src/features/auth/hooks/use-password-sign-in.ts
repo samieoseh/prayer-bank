@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 
 import {
@@ -52,6 +53,7 @@ export function usePasswordSignIn(blocked = false) {
 
     try {
       await signInWithPassword(emailResult.email, password);
+      router.replace('/');
     } catch (error) {
       setState({ status: 'error', message: getAuthErrorMessage(error) });
     }
@@ -81,6 +83,8 @@ export function usePasswordSignIn(blocked = false) {
           status: 'success',
           message: 'Check your email to confirm your account, then return here to sign in.',
         });
+      } else {
+        router.replace('/');
       }
     } catch (error) {
       setState({ status: 'error', message: getAuthErrorMessage(error) });

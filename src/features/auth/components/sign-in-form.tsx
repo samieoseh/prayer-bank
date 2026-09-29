@@ -1,4 +1,4 @@
-import { Button, HelperText, TextInput } from 'react-native-paper';
+import { Button, HelperText, TextInput, useTheme } from 'react-native-paper';
 
 import { usePasswordSignIn } from '@/features/auth/hooks/use-password-sign-in';
 
@@ -7,6 +7,7 @@ type SignInFormProps = {
 };
 
 export function SignInForm({ configurationError }: SignInFormProps) {
+  const theme = useTheme();
   const request = usePasswordSignIn(Boolean(configurationError));
   const feedback = configurationError
     ? configurationError
@@ -18,7 +19,7 @@ export function SignInForm({ configurationError }: SignInFormProps) {
   return (
     <>
       <TextInput
-        activeOutlineColor="#6f7653"
+        activeOutlineColor={theme.colors.primary}
         autoCapitalize="none"
         autoComplete="email"
         autoCorrect={false}
@@ -30,19 +31,19 @@ export function SignInForm({ configurationError }: SignInFormProps) {
         mode="outlined"
         onChangeText={request.setEmail}
         onSubmitEditing={() => undefined}
-        outlineColor="#ddd6c8"
+        outlineColor={theme.colors.outlineVariant}
         outlineStyle={{ borderRadius: 16 }}
         placeholder="you@example.com"
-        placeholderTextColor="#9b9a8d"
+        placeholderTextColor={theme.colors.onSurfaceVariant}
         returnKeyType="next"
-        style={{ backgroundColor: '#fffaf0' }}
+        style={{ backgroundColor: theme.colors.surface }}
         textContentType="emailAddress"
-        textColor="#282923"
+        textColor={theme.colors.onSurface}
         value={request.email}
       />
 
       <TextInput
-        activeOutlineColor="#6f7653"
+        activeOutlineColor={theme.colors.primary}
         autoCapitalize="none"
         autoComplete="current-password"
         contentStyle={{ minHeight: 52 }}
@@ -51,15 +52,15 @@ export function SignInForm({ configurationError }: SignInFormProps) {
         mode="outlined"
         onChangeText={request.setPassword}
         onSubmitEditing={() => void request.submit()}
-        outlineColor="#ddd6c8"
+        outlineColor={theme.colors.outlineVariant}
         outlineStyle={{ borderRadius: 16 }}
         placeholder="Enter your password"
-        placeholderTextColor="#9b9a8d"
+        placeholderTextColor={theme.colors.onSurfaceVariant}
         returnKeyType="done"
         secureTextEntry
-        style={{ marginTop: 10, backgroundColor: '#fffaf0' }}
+        style={{ backgroundColor: theme.colors.surface }}
         textContentType="password"
-        textColor="#282923"
+        textColor={theme.colors.onSurface}
         value={request.password}
       />
 
@@ -67,7 +68,7 @@ export function SignInForm({ configurationError }: SignInFormProps) {
         <HelperText
           accessibilityLiveRegion="polite"
           style={{
-            color: hasError ? '#9a594e' : '#2f6b5f',
+            color: hasError ? theme.colors.error : theme.colors.primary,
             fontSize: 14,
             fontWeight: '600',
             lineHeight: 20,
@@ -79,16 +80,13 @@ export function SignInForm({ configurationError }: SignInFormProps) {
       ) : null}
 
       <Button
-        buttonColor={request.isPending ? '#59603f' : '#6f7653'}
         contentStyle={{ minHeight: 50 }}
         disabled={Boolean(configurationError) || request.isPending}
         labelStyle={{ fontSize: 16, fontWeight: '700' }}
         loading={request.pendingAction === 'sign-in'}
         mode="contained"
         onPress={() => void request.submit()}
-        rippleColor="#59603f"
-        style={{ marginTop: 14, borderRadius: 999 }}
-        textColor="#fffaf0">
+        style={{ marginTop: 14, borderRadius: 999 }}>
         Sign in
       </Button>
 
@@ -99,9 +97,7 @@ export function SignInForm({ configurationError }: SignInFormProps) {
         loading={request.pendingAction === 'sign-up'}
         mode="outlined"
         onPress={() => void request.signUp()}
-        rippleColor="#eee7d8"
-        style={{ marginTop: 10, borderRadius: 999, borderColor: '#6f7653' }}
-        textColor="#59603f">
+        style={{ marginTop: 10, borderRadius: 999, borderColor: theme.colors.outline }}>
         Create account
       </Button>
     </>

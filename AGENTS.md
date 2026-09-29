@@ -32,6 +32,10 @@ The existing lint script requires a separate ESLint setup before it can be used.
 No build, preview, test, browser-test, or combined Verify command is configured.
 Run typecheck before declaring a code change done.
 
+During `/implement`, make code edits only until the final verification step. Do
+not run TypeScript, lint, tests, builds, or other checks between implementation
+steps; run applicable checks once after all code changes are complete.
+
 ## Project conventions
 
 - Use Expo Router. Routes and layouts live in `src/app/`; keep non-route code
