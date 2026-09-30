@@ -1,5 +1,1 @@
-import { Redirect } from 'expo-router';
-
-export default function RequestsIndexRedirect() {
-  return <Redirect href="/" />;
-}
+export { default } from '@/features/prayers/screens/prayer-bank-screen';

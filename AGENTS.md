@@ -4,6 +4,17 @@ Prayer Bank is an Expo and React Native application. Prioritize mobile-first
 patterns, performance, accessibility, and cross-platform compatibility. Product
 scope is not defined yet; do not invent features before the plans establish it.
 
+## Prototype gate
+
+For every planned feature, check whether `prototypes/` contains a relevant
+screen before finalizing the feature spec. When one exists, inspect the relevant
+HTML together with `prototypes/theme.css`, add those files under the spec's
+`Design reference` heading, and carry their established content hierarchy,
+visual tokens, labels, and interaction treatment into the implementation plan.
+Document any deliberate difference required by the current product contract or
+shipped application behavior. Do not silently ignore or override a relevant
+prototype.
+
 ## CodeGraph
 
 If `.codegraph/` exists, use `codegraph explore "<question>"` before grep, find,
@@ -37,6 +48,15 @@ Run typecheck before declaring a code change done.
 During `/implement`, make code edits only until the final verification step. Do
 not run TypeScript, lint, tests, builds, or other checks between implementation
 steps; run applicable checks once after all code changes are complete.
+
+During `/implement`, execute exactly one checklist item from the active spec's
+`Build steps` section at a time. After completing that step's code edits, update
+its checkbox, report the changed files and behavior, and stop for explicit user
+review and approval before starting the next step. Never combine, skip ahead, or
+finish multiple build steps in one pass, even when Blueprint configuration would
+normally allow one final feature-level review. The no-intermediate-checks rule
+still applies: defer TypeScript, lint, tests, and builds until the spec's final
+verification step unless the user explicitly requests a check earlier.
 
 ## Project conventions
 

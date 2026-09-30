@@ -9,6 +9,11 @@ import type {
   PrayerRequestStatus,
   RepositoryResult,
 } from '@/features/prayers/types/prayer';
+import {
+  parseStoredPrayerSchedule,
+  serializeScheduledDays,
+  validatePrayerSchedule,
+} from '@/features/prayers/utils/prayer-schedule';
 
 type CategoryRow = {
   id: string;
@@ -23,6 +28,8 @@ type PrayerRequestRow = {
   category_name: string;
   title: string;
   details: string | null;
+  schedule_type: string | null;
+  scheduled_days: string | null;
   status: PrayerRequestStatus;
   created_at: string;
   updated_at: string;
@@ -31,6 +38,8 @@ type PrayerRequestRow = {
 type ValidatedDraft = {
   title: string;
   details: string | null;
+  scheduleType: NonNullable<PrayerRequestDraft['scheduleType']>;
+  scheduledDays: PrayerRequest['scheduledDays'];
   category:
     | { kind: 'existing'; categoryId: string }
     | { kind: 'new'; name: string };
@@ -100,13 +109,15 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         categoryId = await resolveCategory(transaction, validated.value.category, now);
         await transaction.runAsync(
           `INSERT INTO prayer_requests
-             (id, user_id, category_id, title, details, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+             (id, user_id, category_id, title, details, schedule_type, scheduled_days, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
           requestId,
           ownerId,
           categoryId,
           validated.value.title,
           validated.value.details,
+          validated.value.scheduleType,
+          serializeScheduledDays(validated.value.scheduledDays),
           now,
           now,
         );
@@ -142,11 +153,13 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         const categoryId = await resolveCategory(transaction, validated.value.category, now);
         await transaction.runAsync(
           `UPDATE prayer_requests
-           SET category_id = ?, title = ?, details = ?, updated_at = ?
+           SET category_id = ?, title = ?, details = ?, schedule_type = ?, scheduled_days = ?, updated_at = ?
            WHERE id = ? AND user_id = ?`,
           categoryId,
           validated.value.title,
           validated.value.details,
+          validated.value.scheduleType,
+          serializeScheduledDays(validated.value.scheduledDays),
           now,
           id,
           ownerId,
@@ -231,14 +244,26 @@ function validateDraft(draft: PrayerRequestDraft): RepositoryResult<ValidatedDra
     fieldErrors.category = 'Choose a category.';
   }
 
-  return Object.keys(fieldErrors).length > 0
+  const schedule = validatePrayerSchedule(draft.scheduleType, draft.scheduledDays);
+  if (!schedule.ok) fieldErrors.schedule = schedule.message;
+
+  return Object.keys(fieldErrors).length > 0 || !schedule.ok || !draft.scheduleType
     ? {
         ok: false,
         code: 'validation',
         message: 'Check the highlighted fields.',
         fieldErrors,
       }
-    : { ok: true, value: { title, details, category } };
+    : {
+        ok: true,
+        value: {
+          title,
+          details,
+          category,
+          scheduleType: draft.scheduleType,
+          scheduledDays: schedule.scheduledDays,
+        },
+      };
 }
 
 function mapCategory(row: CategoryRow): Category {
@@ -251,12 +276,15 @@ function mapCategory(row: CategoryRow): Category {
 }
 
 function mapPrayerRequest(row: PrayerRequestRow): PrayerRequest {
+  const schedule = parseStoredPrayerSchedule(row.schedule_type, row.scheduled_days);
+
   return {
     id: row.id,
     categoryId: row.category_id,
     categoryName: row.category_name,
     title: row.title,
     details: row.details,
+    ...schedule,
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -269,6 +297,8 @@ const requestSelect = `
          categories.name AS category_name,
          requests.title,
          requests.details,
+         requests.schedule_type,
+         requests.scheduled_days,
          requests.status,
          requests.created_at,
          requests.updated_at

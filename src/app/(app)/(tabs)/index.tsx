@@ -1,1 +1,1 @@
-export { default } from '@/features/prayers/screens/prayer-bank-screen';
+export { default } from '@/features/prayers/screens/today-screen';

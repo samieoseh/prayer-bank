@@ -7,8 +7,14 @@ import type {
   PrayerFieldErrors,
   PrayerRequest,
   PrayerRequestDraft,
+  PrayerScheduleType,
   RepositoryResult,
+  WeekdayCode,
 } from '@/features/prayers/types/prayer';
+import {
+  validatePrayerSchedule,
+  WEEKDAYS,
+} from '@/features/prayers/utils/prayer-schedule';
 
 type PrayerRequestFormProps = {
   categories: Category[];
@@ -35,6 +41,12 @@ export function PrayerRequestForm({
     initialRequest?.categoryId ?? categories[0]?.id ?? '',
   );
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [scheduleType, setScheduleType] = useState<PrayerScheduleType | null>(
+    initialRequest?.scheduleType ?? null,
+  );
+  const [scheduledDays, setScheduledDays] = useState<WeekdayCode[]>(
+    initialRequest?.scheduledDays ?? [],
+  );
   const [fieldErrors, setFieldErrors] = useState<PrayerFieldErrors>({});
   const [feedback, setFeedback] = useState<string>();
   const [pending, setPending] = useState(false);
@@ -55,6 +67,8 @@ export function PrayerRequestForm({
     if (categoryMode === 'new' && !newCategoryName.trim()) {
       localErrors.category = 'Enter a category name.';
     }
+    const schedule = validatePrayerSchedule(scheduleType, scheduledDays);
+    if (!schedule.ok) localErrors.schedule = schedule.message;
 
     if (Object.keys(localErrors).length > 0) {
       setFieldErrors(localErrors);
@@ -71,6 +85,8 @@ export function PrayerRequestForm({
         categoryMode === 'existing'
           ? { kind: 'existing', categoryId }
           : { kind: 'new', name: newCategoryName },
+      scheduleType,
+      scheduledDays,
     });
     setPending(false);
 
@@ -184,6 +200,61 @@ export function PrayerRequestForm({
 
         <HelperText type="error" visible={Boolean(fieldErrors.category)}>
           {fieldErrors.category}
+        </HelperText>
+      </View>
+
+      <View className="mb-5">
+        <Text className="mb-2 font-bold text-[#282923] dark:text-[#f4efe4]">Schedule</Text>
+        <View className="flex-row flex-wrap gap-2">
+          {([
+            ['daily', 'Daily'],
+            ['weekly', 'Weekly'],
+            ['selectedDays', 'Selected days'],
+          ] as const).map(([value, label]) => (
+            <Chip
+              disabled={pending}
+              key={value}
+              selected={scheduleType === value}
+              onPress={() => {
+                setScheduleType(value);
+                setScheduledDays([]);
+                clearFieldError('schedule');
+              }}>
+              {label}
+            </Chip>
+          ))}
+        </View>
+
+        {scheduleType === 'weekly' || scheduleType === 'selectedDays' ? (
+          <View className="mt-4">
+            <Text className="mb-2 font-bold text-[#282923] dark:text-[#f4efe4]">
+              {scheduleType === 'weekly' ? 'Day' : 'Days'}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {WEEKDAYS.map((day) => (
+                <Chip
+                  disabled={pending}
+                  key={day.code}
+                  selected={scheduledDays.includes(day.code)}
+                  onPress={() => {
+                    setScheduledDays((current) =>
+                      scheduleType === 'weekly'
+                        ? [day.code]
+                        : current.includes(day.code)
+                          ? current.filter((code) => code !== day.code)
+                          : [...current, day.code],
+                    );
+                    clearFieldError('schedule');
+                  }}>
+                  {day.short}
+                </Chip>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        <HelperText type="error" visible={Boolean(fieldErrors.schedule)}>
+          {fieldErrors.schedule}
         </HelperText>
       </View>
 

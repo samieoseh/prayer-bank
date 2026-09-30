@@ -10,6 +10,7 @@ import {
   usePrayerCategoriesQuery,
   usePrayerRequestsQuery,
 } from '@/features/prayers/hooks/use-prayer-queries';
+import { formatPrayerSchedule } from '@/features/prayers/utils/prayer-schedule';
 
 export default function PrayerBankScreen() {
   const queryClient = useQueryClient();
@@ -149,7 +150,7 @@ export default function PrayerBankScreen() {
                 {item.title}
               </Text>
               <Text className="mt-1 text-sm text-[#747468] dark:text-[#c7c2b8]">
-                {item.categoryName}
+                {item.categoryName} · {formatPrayerSchedule(item, true)}
               </Text>
             </View>
             <Text className="text-xs text-[#747468] dark:text-[#c7c2b8]">

@@ -11,6 +11,7 @@ import {
 } from '@/features/prayers/hooks/use-prayer-queries';
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
 import type { PrayerRequest } from '@/features/prayers/types/prayer';
+import { formatPrayerSchedule } from '@/features/prayers/utils/prayer-schedule';
 
 export default function PrayerDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -98,6 +99,7 @@ export default function PrayerDetailScreen() {
           <View className="my-[26px] h-px bg-[#ddd6c8] dark:bg-[#535548]" />
 
           <View className="flex-row flex-wrap">
+            <DetailItem label="Schedule" value={formatPrayerSchedule(request)} />
             <DetailItem label="Status" value={request.status === 'active' ? 'Active' : 'Archived'} />
             <DetailItem label="Added" value={formatDate(request.createdAt)} />
             <DetailItem label="Category" value={request.categoryName} />
