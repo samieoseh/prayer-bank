@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 export async function migratePrayerDatabase(db: SQLiteDatabase) {
   await db.execAsync('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;');
@@ -23,6 +23,8 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           name TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
           UNIQUE (id, user_id)
         );
 
@@ -39,6 +41,8 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           status TEXT NOT NULL CHECK (status IN ('active', 'archived', 'answered')),
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
           FOREIGN KEY (category_id, user_id)
             REFERENCES categories (id, user_id)
             ON UPDATE RESTRICT
@@ -57,6 +61,8 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           description TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
           FOREIGN KEY (prayer_request_id)
             REFERENCES prayer_requests (id)
             ON UPDATE RESTRICT
@@ -67,6 +73,39 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           ON answer_records (answered_on DESC, prayer_request_id);
       `);
     }
+
+    if (version > 0 && version < 4) {
+      await transaction.execAsync(`
+        ALTER TABLE categories
+          ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed'));
+      `);
+    }
+
+    if (version === 3) {
+      await transaction.execAsync(`
+        ALTER TABLE prayer_requests
+          ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed'));
+        ALTER TABLE answer_records
+          ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed'));
+      `);
+    }
+
+    await transaction.execAsync(`
+      CREATE TABLE IF NOT EXISTS prayer_sync_metadata (
+        singleton INTEGER PRIMARY KEY NOT NULL DEFAULT 1 CHECK (singleton = 1),
+        legacy_owner_claimed_by TEXT,
+        last_attempt_at TEXT,
+        last_success_at TEXT
+      );
+
+      INSERT OR IGNORE INTO prayer_sync_metadata (singleton) VALUES (1);
+
+      CREATE INDEX IF NOT EXISTS idx_categories_owner_sync
+        ON categories (user_id, sync_status, updated_at, id);
+    `);
 
     if (version === 1) {
       await transaction.execAsync(`
@@ -93,6 +132,8 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           status TEXT NOT NULL CHECK (status IN ('active', 'archived', 'answered')),
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
           FOREIGN KEY (category_id, user_id)
             REFERENCES categories (id, user_id)
             ON UPDATE RESTRICT
@@ -117,6 +158,8 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           description TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          sync_status TEXT NOT NULL DEFAULT 'pending'
+            CHECK (sync_status IN ('pending', 'synced', 'failed')),
           FOREIGN KEY (prayer_request_id)
             REFERENCES prayer_requests (id)
             ON UPDATE RESTRICT
@@ -127,6 +170,13 @@ export async function migratePrayerDatabase(db: SQLiteDatabase) {
           ON answer_records (answered_on DESC, prayer_request_id);
       `);
     }
+
+    await transaction.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_prayer_requests_owner_sync
+        ON prayer_requests (user_id, sync_status, updated_at, id);
+      CREATE INDEX IF NOT EXISTS idx_answer_records_sync
+        ON answer_records (sync_status, updated_at, prayer_request_id);
+    `);
 
     await transaction.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
   });

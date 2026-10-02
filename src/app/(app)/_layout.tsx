@@ -6,6 +6,8 @@ import { ActivityIndicator, useTheme } from 'react-native-paper';
 
 import { DatabaseErrorScreen } from '@/features/prayers/components/database-error-screen';
 import { migratePrayerDatabase } from '@/features/prayers/data/schema';
+import { PrayerOwnerProvider } from '@/features/prayers/providers/prayer-owner-provider';
+import { PrayerSyncProvider } from '@/features/prayers/providers/prayer-sync-provider';
 
 export default function AppLayout() {
   const theme = useTheme();
@@ -21,14 +23,18 @@ export default function AppLayout() {
       onRetry={() => setDatabaseKey((key) => key + 1)}>
       <Suspense fallback={<DatabaseLoadingScreen />}>
         <SQLiteProvider databaseName="prayer-bank.db" onInit={initialize} useSuspense>
-          <Stack
-            screenOptions={{
-              contentStyle: { backgroundColor: theme.colors.background },
-              headerShown: false,
-            }}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="requests" />
-          </Stack>
+          <PrayerOwnerProvider>
+            <PrayerSyncProvider>
+              <Stack
+                screenOptions={{
+                  contentStyle: { backgroundColor: theme.colors.background },
+                  headerShown: false,
+                }}>
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="requests" />
+              </Stack>
+            </PrayerSyncProvider>
+          </PrayerOwnerProvider>
         </SQLiteProvider>
       </Suspense>
     </DatabaseErrorBoundary>

@@ -5,14 +5,19 @@ import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Button, Chip, IconButton } from 'react-native-paper';
 
+import { useAuth } from '@/features/auth/hooks/use-auth';
 import {
   prayerQueryKeys,
   usePrayerCategoriesQuery,
   usePrayerRequestsQuery,
 } from '@/features/prayers/hooks/use-prayer-queries';
+import { usePrayerSync } from '@/features/prayers/hooks/use-prayer-sync';
+import type { PrayerSyncStatus } from '@/features/prayers/prayer-sync-context';
 import { formatPrayerSchedule } from '@/features/prayers/utils/prayer-schedule';
 
 export default function PrayerBankScreen() {
+  const auth = useAuth();
+  const sync = usePrayerSync();
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState<string>();
   const requestsQuery = usePrayerRequestsQuery('active');
@@ -23,6 +28,7 @@ export default function PrayerBankScreen() {
   const error = requestsQuery.error ?? categoriesQuery.error;
   const refreshing =
     !isPending && (requestsQuery.isFetching || categoriesQuery.isFetching);
+  const isSyncing = sync.status === 'syncing';
 
   const visibleRequests = useMemo(() => {
     if (!categoryId) return requests;
@@ -31,6 +37,14 @@ export default function PrayerBankScreen() {
 
   function reload() {
     return Promise.all([requestsQuery.refetch(), categoriesQuery.refetch()]);
+  }
+
+  function handleCloudPress() {
+    if (auth.status !== 'authenticated') {
+      router.push('/sign-in');
+      return;
+    }
+    sync.retry();
   }
 
   return (
@@ -57,10 +71,11 @@ export default function PrayerBankScreen() {
               </View>
               <View className="flex-row gap-1">
                 <IconButton
-                  accessibilityLabel="Sign in to sync"
-                  icon="cloud-outline"
+                  accessibilityLabel={getCloudActionLabel(sync.status)}
+                  disabled={isSyncing}
+                  icon={getCloudIcon(sync.status)}
                   mode="contained-tonal"
-                  onPress={() => router.push('/sign-in')}
+                  onPress={handleCloudPress}
                 />
                 <IconButton
                   accessibilityLabel="Add prayer"
@@ -97,12 +112,23 @@ export default function PrayerBankScreen() {
               <Text className="text-base font-bold text-[#282923] dark:text-[#f4efe4]">
                 Recently updated
               </Text>
-              <View className="flex-row items-center gap-2">
-                {refreshing ? <ActivityIndicator size={12} /> : null}
-                <Text className="text-xs text-[#747468] dark:text-[#c7c2b8]">
-                  {refreshing ? 'Refreshing' : 'Offline on this device'}
+              <Pressable
+                accessibilityLabel={
+                  auth.status === 'authenticated'
+                    ? `${getSyncStatusLabel(sync.status)}. Tap to retry synchronization.`
+                    : getSyncStatusLabel(sync.status)
+                }
+                accessibilityRole={auth.status === 'authenticated' ? 'button' : undefined}
+                className="min-h-11 flex-row items-center gap-2 px-1"
+                disabled={auth.status !== 'authenticated' || isSyncing}
+                onPress={sync.retry}>
+                {refreshing || isSyncing ? <ActivityIndicator size={12} /> : null}
+                <Text
+                  accessibilityLiveRegion="polite"
+                  className="text-xs text-[#747468] dark:text-[#c7c2b8]">
+                  {refreshing ? 'Refreshing' : getSyncStatusLabel(sync.status)}
                 </Text>
-              </View>
+              </Pressable>
             </View>
           </>
         }
@@ -161,6 +187,29 @@ export default function PrayerBankScreen() {
       />
     </SafeAreaView>
   );
+}
+
+function getSyncStatusLabel(status: PrayerSyncStatus) {
+  if (status === 'syncing') return 'Syncing';
+  if (status === 'synced') return 'Synced';
+  if (status === 'failed') return 'Sync failed';
+  if (status === 'pending') return 'Changes saved on this device';
+  return 'Offline on this device';
+}
+
+function getCloudActionLabel(status: PrayerSyncStatus) {
+  if (status === 'signed-out') return 'Sign in to sync';
+  if (status === 'failed' || status === 'pending') return 'Retry prayer synchronization';
+  if (status === 'syncing') return 'Prayer synchronization in progress';
+  return 'Sync prayer bank';
+}
+
+function getCloudIcon(status: PrayerSyncStatus) {
+  if (status === 'syncing') return 'cloud-sync';
+  if (status === 'synced') return 'cloud-check';
+  if (status === 'failed') return 'cloud-alert';
+  if (status === 'pending') return 'cloud-upload-outline';
+  return 'cloud-outline';
 }
 
 function PrayerListSkeleton() {

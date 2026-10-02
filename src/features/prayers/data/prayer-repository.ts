@@ -139,8 +139,8 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         categoryId = await resolveCategory(transaction, validated.value.category, now);
         await transaction.runAsync(
           `INSERT INTO prayer_requests
-             (id, user_id, category_id, title, details, schedule_type, scheduled_days, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
+             (id, user_id, category_id, title, details, schedule_type, scheduled_days, status, created_at, updated_at, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, 'pending')`,
           requestId,
           ownerId,
           categoryId,
@@ -183,7 +183,7 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         const categoryId = await resolveCategory(transaction, validated.value.category, now);
         await transaction.runAsync(
           `UPDATE prayer_requests
-           SET category_id = ?, title = ?, details = ?, schedule_type = ?, scheduled_days = ?, updated_at = ?
+           SET category_id = ?, title = ?, details = ?, schedule_type = ?, scheduled_days = ?, updated_at = ?, sync_status = 'pending'
            WHERE id = ? AND user_id = ?`,
           categoryId,
           validated.value.title,
@@ -211,7 +211,7 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
     try {
       const result = await db.runAsync(
         `UPDATE prayer_requests
-         SET status = ?, updated_at = ?
+         SET status = ?, updated_at = ?, sync_status = 'pending'
          WHERE id = ? AND user_id = ?`,
         status,
         new Date().toISOString(),
@@ -256,8 +256,8 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
 
         await transaction.runAsync(
           `INSERT INTO answer_records
-             (id, prayer_request_id, answered_on, description, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+             (id, prayer_request_id, answered_on, description, created_at, updated_at, sync_status)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
           answerId,
           id,
           validated.value.answeredOn,
@@ -267,7 +267,7 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         );
         const updated = await transaction.runAsync(
           `UPDATE prayer_requests
-           SET status = 'answered', updated_at = ?
+           SET status = 'answered', updated_at = ?, sync_status = 'pending'
            WHERE id = ? AND user_id = ? AND status IN ('active', 'archived')`,
           now,
           id,
@@ -315,8 +315,8 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
 
     const categoryId = randomUUID().toLowerCase();
     await transaction.runAsync(
-      `INSERT INTO categories (id, user_id, name, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO categories (id, user_id, name, created_at, updated_at, sync_status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
       categoryId,
       ownerId,
       category.name,

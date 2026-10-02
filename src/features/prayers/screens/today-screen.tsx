@@ -3,8 +3,10 @@ import { router, type Href, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ActivityIndicator, Button, Chip, IconButton } from 'react-native-paper';
+import { ActivityIndicator, Button, Chip } from 'react-native-paper';
 
+import { useAuth } from '@/features/auth/hooks/use-auth';
+import { ProfileAvatar } from '@/features/prayers/components/profile-avatar';
 import {
   prayerQueryKeys,
   usePrayerCategoriesQuery,
@@ -16,6 +18,7 @@ import {
 } from '@/features/prayers/utils/prayer-schedule';
 
 export default function TodayScreen() {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState<string>();
   const currentDate = useCurrentLocalDate();
@@ -63,12 +66,9 @@ export default function TodayScreen() {
                   Today
                 </Text>
               </View>
-              <IconButton
-                accessibilityLabel="Add prayer"
-                icon="plus"
-                mode="contained"
-                onPress={() => router.push('/requests/new' as Href)}
-              />
+              {auth.status === 'authenticated' ? (
+                <ProfileAvatar session={auth.session} />
+              ) : null}
             </View>
 
             <View className="mb-[26px] rounded-[24px] bg-[#e4e5d5] p-5 dark:bg-[#34362c]">

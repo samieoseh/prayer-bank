@@ -38,6 +38,7 @@ coverage/
 
 # generated or example output
 example/
+supabase/.temp/
 
 # AI Blueprint local workflow files
 .agents/

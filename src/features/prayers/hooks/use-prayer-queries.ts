@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
 
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
 import type { PrayerRequestStatus } from '@/features/prayers/types/prayer';
@@ -12,6 +12,10 @@ export const prayerQueryKeys = {
   details: ['prayers', 'details'] as const,
   detail: (requestId: string) => ['prayers', 'details', requestId] as const,
 };
+
+export function invalidatePrayerQueries(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({ queryKey: prayerQueryKeys.root });
+}
 
 export function usePrayerCategoriesQuery() {
   const repository = usePrayerRepository();
