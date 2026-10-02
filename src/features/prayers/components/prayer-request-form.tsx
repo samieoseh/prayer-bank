@@ -130,6 +130,7 @@ export function PrayerRequestForm({
         <Text className="mb-2 font-bold text-[#282923] dark:text-[#f4efe4]">Details</Text>
         <TextInput
           activeOutlineColor={theme.colors.primary}
+          contentStyle={{ minHeight: 118, paddingBottom: 14, paddingTop: 14, textAlignVertical: 'top' }}
           editable={!pending}
           mode="outlined"
           multiline

@@ -8,6 +8,7 @@ export const prayerQueryKeys = {
   categories: ['prayers', 'categories'] as const,
   lists: ['prayers', 'lists'] as const,
   list: (status: PrayerRequestStatus) => ['prayers', 'lists', status] as const,
+  answers: ['prayers', 'answers'] as const,
   details: ['prayers', 'details'] as const,
   detail: (requestId: string) => ['prayers', 'details', requestId] as const,
 };
@@ -48,6 +49,20 @@ export function usePrayerRequestQuery(requestId?: string) {
     queryKey: prayerQueryKeys.detail(requestId ?? 'missing'),
     queryFn: async () => {
       const result = await repository.getRequest(requestId!);
+      if (!result.ok) throw new Error(result.message);
+      return result.value;
+    },
+    staleTime: Infinity,
+  });
+}
+
+export function useAnsweredPrayersQuery() {
+  const repository = usePrayerRepository();
+
+  return useQuery({
+    queryKey: prayerQueryKeys.answers,
+    queryFn: async () => {
+      const result = await repository.listAnsweredPrayers();
       if (!result.ok) throw new Error(result.message);
       return result.value;
     },

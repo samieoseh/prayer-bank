@@ -2,10 +2,14 @@ import { randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type {
+  AnswerDraft,
+  AnsweredPrayer,
+  AnswerFieldErrors,
   Category,
   PrayerFieldErrors,
   PrayerRequest,
   PrayerRequestDraft,
+  PrayerOpenStatus,
   PrayerRequestStatus,
   RepositoryResult,
 } from '@/features/prayers/types/prayer';
@@ -31,6 +35,11 @@ type PrayerRequestRow = {
   schedule_type: string | null;
   scheduled_days: string | null;
   status: PrayerRequestStatus;
+  answer_id: string | null;
+  answered_on: string | null;
+  answer_description: string | null;
+  answer_created_at: string | null;
+  answer_updated_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -43,6 +52,11 @@ type ValidatedDraft = {
   category:
     | { kind: 'existing'; categoryId: string }
     | { kind: 'new'; name: string };
+};
+
+type ValidatedAnswerDraft = {
+  answeredOn: string;
+  description: string;
 };
 
 const STORAGE_MESSAGE = 'Prayer requests could not be loaded or saved. Try again.';
@@ -75,6 +89,22 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
         status,
       );
       return { ok: true, value: rows.map(mapPrayerRequest) };
+    } catch {
+      return storageFailure();
+    }
+  }
+
+  async function listAnsweredPrayers(): Promise<RepositoryResult<AnsweredPrayer[]>> {
+    try {
+      const rows = await db.getAllAsync<PrayerRequestRow>(
+        `${requestSelect}
+         WHERE requests.user_id = ?
+           AND requests.status = 'answered'
+           AND answers.id IS NOT NULL
+         ORDER BY answers.answered_on DESC, requests.id`,
+        ownerId,
+      );
+      return { ok: true, value: rows.map(mapAnsweredPrayer) };
     } catch {
       return storageFailure();
     }
@@ -174,7 +204,7 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
 
   async function setStatus(
     id: string,
-    status: PrayerRequestStatus,
+    status: PrayerOpenStatus,
   ): Promise<RepositoryResult<PrayerRequest>> {
     if (!id.trim()) return notFound();
 
@@ -191,6 +221,80 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
       return result.changes === 0 ? notFound() : getRequest(id);
     } catch {
       return storageFailure();
+    }
+  }
+
+  async function recordAnswer(
+    id: string,
+    draft: AnswerDraft,
+  ): Promise<RepositoryResult<AnsweredPrayer, AnswerFieldErrors>> {
+    const validated = validateAnswerDraft(draft);
+    if (!validated.ok) return validated;
+    if (!id.trim()) return notFound<AnsweredPrayer, AnswerFieldErrors>();
+
+    const answerId = randomUUID().toLowerCase();
+    const now = new Date().toISOString();
+    let state: 'missing' | 'already-answered' | 'recorded' = 'missing';
+
+    try {
+      await db.withExclusiveTransactionAsync(async (transaction) => {
+        const request = await transaction.getFirstAsync<{ status: PrayerRequestStatus }>(
+          'SELECT status FROM prayer_requests WHERE id = ? AND user_id = ?',
+          id,
+          ownerId,
+        );
+        if (!request) return;
+
+        const existingAnswer = await transaction.getFirstAsync<{ id: string }>(
+          'SELECT id FROM answer_records WHERE prayer_request_id = ?',
+          id,
+        );
+        if (request.status === 'answered' || existingAnswer) {
+          state = 'already-answered';
+          return;
+        }
+
+        await transaction.runAsync(
+          `INSERT INTO answer_records
+             (id, prayer_request_id, answered_on, description, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          answerId,
+          id,
+          validated.value.answeredOn,
+          validated.value.description,
+          now,
+          now,
+        );
+        const updated = await transaction.runAsync(
+          `UPDATE prayer_requests
+           SET status = 'answered', updated_at = ?
+           WHERE id = ? AND user_id = ? AND status IN ('active', 'archived')`,
+          now,
+          id,
+          ownerId,
+        );
+        if (updated.changes !== 1) throw new Error('Prayer request lifecycle changed.');
+        state = 'recorded';
+      });
+
+      if (state === 'missing') return notFound<AnsweredPrayer, AnswerFieldErrors>();
+      if (state === 'already-answered') {
+        return {
+          ok: false,
+          code: 'validation',
+          message: 'This prayer request already has an answer.',
+        };
+      }
+
+      const result = await getRequest(id);
+      if (!result.ok) {
+        return { ok: false, code: result.code, message: result.message };
+      }
+      return result.value.status === 'answered' && result.value.answer
+        ? { ok: true, value: result.value as AnsweredPrayer }
+        : storageFailure<AnsweredPrayer, AnswerFieldErrors>();
+    } catch {
+      return storageFailure<AnsweredPrayer, AnswerFieldErrors>();
     }
   }
 
@@ -222,7 +326,16 @@ export function createPrayerRepository(db: SQLiteDatabase, ownerId: string) {
     return categoryId;
   }
 
-  return { listCategories, listRequests, getRequest, createRequest, updateRequest, setStatus };
+  return {
+    listCategories,
+    listRequests,
+    listAnsweredPrayers,
+    getRequest,
+    createRequest,
+    updateRequest,
+    setStatus,
+    recordAnswer,
+  };
 }
 
 function validateDraft(draft: PrayerRequestDraft): RepositoryResult<ValidatedDraft> {
@@ -266,6 +379,44 @@ function validateDraft(draft: PrayerRequestDraft): RepositoryResult<ValidatedDra
       };
 }
 
+function validateAnswerDraft(
+  draft: AnswerDraft,
+): RepositoryResult<ValidatedAnswerDraft, AnswerFieldErrors> {
+  const fieldErrors: AnswerFieldErrors = {};
+  const answeredOn = draft.answeredOn.trim();
+  const description = draft.description.trim();
+
+  if (!isCanonicalDate(answeredOn)) {
+    fieldErrors.answeredOn = 'Enter a real date in YYYY-MM-DD format.';
+  }
+  if (!description) fieldErrors.description = 'Describe how the prayer was answered.';
+
+  return Object.keys(fieldErrors).length > 0
+    ? {
+        ok: false,
+        code: 'validation',
+        message: 'Check the highlighted fields.',
+        fieldErrors,
+      }
+    : { ok: true, value: { answeredOn, description } };
+}
+
+function isCanonicalDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
 function mapCategory(row: CategoryRow): Category {
   return {
     id: row.id,
@@ -286,9 +437,27 @@ function mapPrayerRequest(row: PrayerRequestRow): PrayerRequest {
     details: row.details,
     ...schedule,
     status: row.status,
+    answer: row.answer_id
+      ? {
+          id: row.answer_id,
+          prayerRequestId: row.id,
+          answeredOn: row.answered_on!,
+          description: row.answer_description!,
+          createdAt: row.answer_created_at!,
+          updatedAt: row.answer_updated_at!,
+        }
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function mapAnsweredPrayer(row: PrayerRequestRow): AnsweredPrayer {
+  const request = mapPrayerRequest(row);
+  if (request.status !== 'answered' || !request.answer) {
+    throw new Error('Answered prayer is missing its answer record.');
+  }
+  return request as AnsweredPrayer;
 }
 
 const requestSelect = `
@@ -300,12 +469,19 @@ const requestSelect = `
          requests.schedule_type,
          requests.scheduled_days,
          requests.status,
+         answers.id AS answer_id,
+         answers.answered_on,
+         answers.description AS answer_description,
+         answers.created_at AS answer_created_at,
+         answers.updated_at AS answer_updated_at,
          requests.created_at,
          requests.updated_at
   FROM prayer_requests AS requests
   INNER JOIN categories
     ON categories.id = requests.category_id
-   AND categories.user_id = requests.user_id`;
+   AND categories.user_id = requests.user_id
+  LEFT JOIN answer_records AS answers
+    ON answers.prayer_request_id = requests.id`;
 
 class CategoryNotFoundError extends Error {}
 
@@ -313,10 +489,12 @@ function isCategoryNotFound(error: unknown) {
   return error instanceof CategoryNotFoundError;
 }
 
-function notFound<T>(message = 'That prayer request is no longer available.'): RepositoryResult<T> {
+function notFound<T, FieldErrors = PrayerFieldErrors>(
+  message = 'That prayer request is no longer available.',
+): RepositoryResult<T, FieldErrors> {
   return { ok: false, code: 'not-found', message };
 }
 
-function storageFailure<T>(): RepositoryResult<T> {
+function storageFailure<T, FieldErrors = PrayerFieldErrors>(): RepositoryResult<T, FieldErrors> {
   return { ok: false, code: 'storage', message: STORAGE_MESSAGE };
 }

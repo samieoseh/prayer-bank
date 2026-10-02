@@ -11,6 +11,7 @@ import {
 } from '@/features/prayers/hooks/use-prayer-queries';
 import { usePrayerRepository } from '@/features/prayers/hooks/use-prayer-repository';
 import type { PrayerRequest } from '@/features/prayers/types/prayer';
+import { formatAnsweredOn } from '@/features/prayers/utils/prayer-answer';
 import { formatPrayerSchedule } from '@/features/prayers/utils/prayer-schedule';
 
 export default function PrayerDetailScreen() {
@@ -23,7 +24,7 @@ export default function PrayerDetailScreen() {
   const [feedback, setFeedback] = useState<string>();
 
   async function changeLifecycle(request: PrayerRequest) {
-    if (pending) return;
+    if (pending || request.status === 'answered') return;
     setPending(true);
     setFeedback(undefined);
     const result = await repository.setStatus(
@@ -100,11 +101,22 @@ export default function PrayerDetailScreen() {
 
           <View className="flex-row flex-wrap">
             <DetailItem label="Schedule" value={formatPrayerSchedule(request)} />
-            <DetailItem label="Status" value={request.status === 'active' ? 'Active' : 'Archived'} />
+            <DetailItem label="Status" value={formatStatus(request.status)} />
             <DetailItem label="Added" value={formatDate(request.createdAt)} />
             <DetailItem label="Category" value={request.categoryName} />
             <DetailItem label="Updated" value={formatDate(request.updatedAt)} />
           </View>
+
+          {request.answer ? (
+            <View className="rounded-2xl bg-[#eee7d9] p-5 dark:bg-[#292b22]">
+              <Text className="text-xs font-bold uppercase tracking-[1.2px] text-[#59603f] dark:text-[#bbc49a]">
+                Answered {formatAnsweredOn(request.answer.answeredOn)}
+              </Text>
+              <Text className="mt-3 text-lg leading-7 text-[#282923] dark:text-[#f4efe4]">
+                {request.answer.description}
+              </Text>
+            </View>
+          ) : null}
 
           {feedback ? (
             <Text accessibilityLiveRegion="assertive" className="mt-6 text-[#9a594e] dark:text-[#e8a59a]">
@@ -112,18 +124,30 @@ export default function PrayerDetailScreen() {
             </Text>
           ) : null}
 
-          <View className="mt-[35px] flex-row gap-3">
+          <View className="mt-[35px] gap-3">
+            {request.status !== 'answered' ? (
+              <View className="flex-row gap-3">
+                <Button
+                  className="flex-1"
+                  disabled={pending}
+                  loading={pending}
+                  mode="contained-tonal"
+                  onPress={() => void changeLifecycle(request)}>
+                  {request.status === 'active' ? 'Archive' : 'Restore'}
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={pending}
+                  mode="contained"
+                  onPress={() =>
+                    router.push({ pathname: '/requests/[id]/answer', params: { id: request.id } } as unknown as Href)
+                  }>
+                  Record answer
+                </Button>
+              </View>
+            ) : null}
             <Button
-              className="flex-1"
-              disabled={pending}
-              loading={pending}
-              mode="contained-tonal"
-              onPress={() => void changeLifecycle(request)}>
-              {request.status === 'active' ? 'Archive' : 'Restore'}
-            </Button>
-            <Button
-              className="flex-1"
-              mode="contained"
+              mode={request.status === 'answered' ? 'contained' : 'outlined'}
               onPress={() =>
                 router.push({ pathname: '/requests/[id]/edit', params: { id: request.id } } as unknown as Href)
               }>
@@ -146,4 +170,9 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
+}
+
+function formatStatus(status: PrayerRequest['status']) {
+  if (status === 'answered') return 'Answered';
+  return status === 'active' ? 'Active' : 'Archived';
 }
