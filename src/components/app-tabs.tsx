@@ -36,6 +36,27 @@ export default function AppTabs() {
           }
         />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="answered">
+        <NativeTabs.Trigger.Label>Answered</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={MaterialDesignIcons}
+              name="check-circle-outline"
+            />
+          }
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="review">
+        <NativeTabs.Trigger.Label>Review</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon family={MaterialDesignIcons} name="history" />
+          }
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
