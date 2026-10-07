@@ -34,6 +34,9 @@ export default function AppTabs() {
           <TabTrigger name="review" href={'/review' as Href} asChild>
             <TabButton>Review</TabButton>
           </TabTrigger>
+          <TabTrigger name="settings" href={'/settings' as Href} asChild>
+            <TabButton>Settings</TabButton>
+          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>

@@ -35,7 +35,20 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Prayer Bank to use Face ID to unlock your private prayer matters."
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true,
+          "faceIDPermission": "Allow Prayer Bank to use Face ID to unlock your private prayer matters."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

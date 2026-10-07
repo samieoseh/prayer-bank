@@ -57,6 +57,18 @@ export default function AppTabs() {
           }
         />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={MaterialDesignIcons}
+              name="cog-outline"
+            />
+          }
+        />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

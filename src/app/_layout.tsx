@@ -5,6 +5,8 @@ import { useColorScheme } from 'react-native';
 import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
 
 import { AuthProvider } from '@/features/auth/providers/auth-provider';
+import { AppLockGate } from '@/features/app-lock/components/app-lock-gate';
+import { AppLockProvider } from '@/features/app-lock/providers/app-lock-provider';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -20,11 +22,15 @@ export default function RootLayout() {
 
   return (
     <PaperProvider theme={theme}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RootNavigator backgroundColor={theme.colors.background} />
-        </AuthProvider>
-      </QueryClientProvider>
+      <AppLockProvider>
+        <AppLockGate>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <RootNavigator backgroundColor={theme.colors.background} />
+            </AuthProvider>
+          </QueryClientProvider>
+        </AppLockGate>
+      </AppLockProvider>
     </PaperProvider>
   );
 }

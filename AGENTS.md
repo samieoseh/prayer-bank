@@ -75,6 +75,10 @@ verification step unless the user explicitly requests a check earlier.
 - Preserve the existing native and web tab components, tab styling, labels,
   behavior, and every asset under `assets/images/tabIcons/` unless the user
   explicitly requests a tab redesign.
+- Keep every tab screen the same full available viewport height. Each tab must
+  use the shared full-height safe-area root and a flexing content container so
+  switching tabs never changes the page or tab-bar height, including on short
+  or empty screens.
 - When the user requests code-only work, make code edits only. Do not run lint,
   typecheck, tests, builds, installs, development servers, or other commands unless
   the user explicitly requests them.
