@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
 const CONFIGURATION_MESSAGE =
@@ -10,6 +10,37 @@ export class SupabaseConfigurationError extends Error {
     super(message);
     this.name = 'SupabaseConfigurationError';
   }
+}
+
+export async function getPersistedSupabaseSession(): Promise<Session | null> {
+  const { url } = requireConfiguration();
+  const projectRef = new URL(url).hostname.split('.')[0];
+  const storedValue = await AsyncStorage.getItem(`sb-${projectRef}-auth-token`);
+
+  if (!storedValue) return null;
+
+  try {
+    const session: unknown = JSON.parse(storedValue);
+    return isPersistedSession(session) ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+function isPersistedSession(value: unknown): value is Session {
+  if (!value || typeof value !== 'object') return false;
+
+  const session = value as Partial<Session>;
+  return (
+    typeof session.access_token === 'string' &&
+    session.access_token.length > 0 &&
+    typeof session.refresh_token === 'string' &&
+    session.refresh_token.length > 0 &&
+    typeof session.expires_at === 'number' &&
+    Boolean(session.user) &&
+    typeof session.user?.id === 'string' &&
+    session.user.id.length > 0
+  );
 }
 
 let client: SupabaseClient | undefined;

@@ -4,25 +4,24 @@
     "slug": "prayer-bank",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/prayer-bank-icon.png",
     "scheme": "prayerbank",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/prayer-bank-icon.png"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#F8F3E8",
+        "foregroundImage": "./assets/images/prayer-bank-mark.png"
       },
+      "icon": "./assets/images/prayer-bank-icon.png",
       "predictiveBackGestureEnabled": false,
       "package": "com.samuel9090.prayerbank"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png",
+      "favicon": "./assets/images/prayer-bank-icon.png",
       "bundler": "metro"
     },
     "plugins": [
@@ -30,9 +29,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F8F3E8",
+          "image": "./assets/images/prayer-bank-mark.png",
+          "imageWidth": 200
         }
       ],
       "expo-sqlite",

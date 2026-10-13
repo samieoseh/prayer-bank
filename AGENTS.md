@@ -19,6 +19,7 @@ prototype.
 
 If `.codegraph/` exists, use `codegraph explore "<question>"` before grep, find,
 or broad file reading. Otherwise skip CodeGraph; indexing is the user's decision.
+Do not use CCC or CocoIndex Code in this repository.
 
 ## Expo documentation
 
