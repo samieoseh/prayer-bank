@@ -40,7 +40,6 @@ function RootNavigator({ backgroundColor }: { backgroundColor: string }) {
     <Stack screenOptions={{ contentStyle: { backgroundColor }, headerShown: false }}>
       <Stack.Screen name="(app)" />
       <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="auth/callback" />
     </Stack>
   );
 }

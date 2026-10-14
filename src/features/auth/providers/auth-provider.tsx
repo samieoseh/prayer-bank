@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { AuthContext, type AuthState } from '@/features/auth/auth-context';
-import {
-  getPersistedSupabaseSession,
-  getSupabaseClient,
-  SupabaseConfigurationError,
-} from '@/lib/supabase';
+import { getSupabaseClient, SupabaseConfigurationError } from '@/lib/supabase';
+
+const AUTH_INITIALIZATION_FALLBACK_MS = 3_000;
+const AUTH_INITIALIZATION_ERROR =
+  'Authentication is temporarily unavailable. You can continue offline or try signing in again.';
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
@@ -15,128 +15,95 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let isActive = true;
     let receivedAuthEvent = false;
-    let cachedSession: Awaited<ReturnType<typeof getPersistedSupabaseSession>> = null;
-    let cleanup: (() => void) | undefined;
-
-    console.log('[auth] Auth provider initialization started.', {
-      platform: Platform.OS,
-      appState: AppState.currentState,
-    });
+    let cleanup = () => {};
 
     async function initialize() {
+      let supabase: ReturnType<typeof getSupabaseClient>;
+
       try {
-        cachedSession = await getPersistedSupabaseSession();
+        supabase = getSupabaseClient();
+      } catch (error) {
         if (!isActive) return;
 
-        if (cachedSession) {
-          setState({
-            status: 'authenticated',
-            session: cachedSession,
-            userId: cachedSession.user.id,
-          });
-        }
-
-        const supabase = getSupabaseClient();
-        const appStateSubscription =
-          Platform.OS === 'web'
-            ? undefined
-            : AppState.addEventListener('change', (nextState) => {
-                console.log('[auth] App state changed.', { nextState });
-                if (nextState === 'active') {
-                  supabase.auth.startAutoRefresh();
-                } else {
-                  supabase.auth.stopAutoRefresh();
-                }
-              });
-
-        if (Platform.OS !== 'web' && AppState.currentState === 'active') {
-          supabase.auth.startAutoRefresh();
-        }
-
-        const {
-          data: { subscription },
-        } = supabase.auth.onAuthStateChange((event, session) => {
-          receivedAuthEvent = true;
-          console.log('[auth] Auth state event received.', {
-            event,
-            hasSession: Boolean(session),
-            isActive,
-          });
-          if (!isActive) return;
-
-          if (session) {
-            cachedSession = session;
-            setState({ status: 'authenticated', session, userId: session.user.id });
-          } else if (event !== 'INITIAL_SESSION' || !cachedSession) {
-            cachedSession = null;
-            setState({ status: 'unauthenticated' });
-          }
-        });
-
-        void supabase.auth
-          .getSession()
-          .then(({ data, error }) => {
-            console.log('[auth] Persisted session lookup completed.', {
-              hasSession: Boolean(data.session),
-              hasError: Boolean(error),
-              receivedAuthEvent,
-              isActive,
-            });
-            if (!isActive || receivedAuthEvent) return;
-
-            if (!error && data.session) {
-              cachedSession = data.session;
-              setState({
-                status: 'authenticated',
-                session: data.session,
-                userId: data.session.user.id,
-              });
-            } else if (!cachedSession) {
-              setState({ status: 'unauthenticated' });
-            }
-          })
-          .catch((error: unknown) => {
-            console.log('[auth] Persisted session lookup rejected.', {
-              errorType: error instanceof Error ? error.name : typeof error,
-              isActive,
-            });
-            if (isActive && !cachedSession) setState({ status: 'unauthenticated' });
-          });
-
-        return () => {
-          isActive = false;
-          console.log('[auth] Auth provider cleaned up.');
-          appStateSubscription?.remove();
-          if (Platform.OS !== 'web') supabase.auth.stopAutoRefresh();
-          subscription.unsubscribe();
-        };
-      } catch (error) {
-        console.log('[auth] Auth provider initialization failed.', {
-          errorType: error instanceof Error ? error.name : typeof error,
-        });
         setState({
           status: 'unauthenticated',
-          configurationError:
-            error instanceof SupabaseConfigurationError
-              ? error.message
-              : 'Authentication could not be initialized.',
+          ...(error instanceof SupabaseConfigurationError
+            ? { configurationError: error.message }
+            : { initializationError: AUTH_INITIALIZATION_ERROR }),
         });
+        return;
+      }
 
-        return () => {
-          isActive = false;
-          console.log('[auth] Auth provider cleaned up after initialization failure.');
-        };
+      const appStateSubscription =
+        Platform.OS === 'web'
+          ? undefined
+          : AppState.addEventListener('change', (nextState) => {
+              if (nextState === 'active') {
+                supabase.auth.startAutoRefresh();
+              } else {
+                supabase.auth.stopAutoRefresh();
+              }
+            });
+
+      if (Platform.OS !== 'web' && AppState.currentState === 'active') {
+        supabase.auth.startAutoRefresh();
+      }
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        receivedAuthEvent = true;
+        if (!isActive) return;
+
+        if (session) {
+          setState({ status: 'authenticated', session, userId: session.user.id });
+        } else {
+          setState({ status: 'unauthenticated' });
+        }
+      });
+      const loadingFallback = setTimeout(() => {
+        if (isActive && !receivedAuthEvent) {
+          setState({ status: 'unauthenticated' });
+        }
+      }, AUTH_INITIALIZATION_FALLBACK_MS);
+
+      cleanup = () => {
+        clearTimeout(loadingFallback);
+        appStateSubscription?.remove();
+        if (Platform.OS !== 'web') supabase.auth.stopAutoRefresh();
+        subscription.unsubscribe();
+      };
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!isActive || receivedAuthEvent) return;
+
+        if (data.session) {
+          setState({
+            status: 'authenticated',
+            session: data.session,
+            userId: data.session.user.id,
+          });
+        } else {
+          setState({ status: 'unauthenticated' });
+        }
+      } catch {
+        if (!isActive || receivedAuthEvent) return;
+        setState({
+          status: 'unauthenticated',
+          initializationError: AUTH_INITIALIZATION_ERROR,
+        });
+      } finally {
+        clearTimeout(loadingFallback);
       }
     }
 
-    void initialize().then((dispose) => {
-      if (!isActive) dispose?.();
-      else cleanup = dispose;
-    });
+    void initialize();
 
     return () => {
       isActive = false;
-      cleanup?.();
+      cleanup();
     };
   }, []);
 

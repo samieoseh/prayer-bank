@@ -3,7 +3,11 @@ import { createContext } from 'react';
 
 export type AuthState =
   | { status: 'loading' }
-  | { status: 'unauthenticated'; configurationError?: string }
+  | {
+      status: 'unauthenticated';
+      configurationError?: string;
+      initializationError?: string;
+    }
   | { status: 'authenticated'; session: Session; userId: string };
 
 export const AuthContext = createContext<AuthState | undefined>(undefined);

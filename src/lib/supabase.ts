@@ -1,9 +1,15 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
+
+import { supabaseAuthStorage } from '@/lib/supabase-auth-storage';
 
 const CONFIGURATION_MESSAGE =
   'Supabase is not configured. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in a local environment file.';
+const INVALID_CLIENT_KEY_MESSAGE =
+  'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be a valid Supabase publishable key or legacy anon key.';
+const PUBLISHABLE_KEY_PATTERN =
+  /^sb_publishable_[A-Za-z0-9_-]{22}_[A-Za-z0-9_-]{8}$/;
+const JWT_SEGMENT_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export class SupabaseConfigurationError extends Error {
   constructor(message = CONFIGURATION_MESSAGE) {
@@ -12,59 +18,40 @@ export class SupabaseConfigurationError extends Error {
   }
 }
 
-export async function getPersistedSupabaseSession(): Promise<Session | null> {
-  const { url } = requireConfiguration();
-  const projectRef = new URL(url).hostname.split('.')[0];
-  const storedValue = await AsyncStorage.getItem(`sb-${projectRef}-auth-token`);
-
-  if (!storedValue) return null;
-
-  try {
-    const session: unknown = JSON.parse(storedValue);
-    return isPersistedSession(session) ? session : null;
-  } catch {
-    return null;
-  }
-}
-
-function isPersistedSession(value: unknown): value is Session {
-  if (!value || typeof value !== 'object') return false;
-
-  const session = value as Partial<Session>;
-  return (
-    typeof session.access_token === 'string' &&
-    session.access_token.length > 0 &&
-    typeof session.refresh_token === 'string' &&
-    session.refresh_token.length > 0 &&
-    typeof session.expires_at === 'number' &&
-    Boolean(session.user) &&
-    typeof session.user?.id === 'string' &&
-    session.user.id.length > 0
-  );
-}
-
 let client: SupabaseClient | undefined;
 
 function assertPublishableKey(key: string) {
-  if (key.startsWith('sb_secret_') || readJwtRole(key) === 'service_role') {
-    throw new SupabaseConfigurationError(
-      'A Supabase service-role or secret key cannot be used in this mobile app. Configure the publishable key instead.',
-    );
-  }
+  if (PUBLISHABLE_KEY_PATTERN.test(key) || readJwtRole(key) === 'anon') return;
+
+  throw new SupabaseConfigurationError(INVALID_CLIENT_KEY_MESSAGE);
 }
 
 function readJwtRole(key: string): string | undefined {
-  const payload = key.split('.')[1];
+  const segments = key.split('.');
 
-  if (!payload || typeof globalThis.atob !== 'function') {
+  if (
+    segments.length !== 3 ||
+    segments.some(
+      (segment) =>
+        !JWT_SEGMENT_PATTERN.test(segment) || segment.length % 4 === 1,
+    ) ||
+    typeof globalThis.atob !== 'function'
+  ) {
     return undefined;
   }
 
   try {
+    const payload = segments[1];
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const decoded = JSON.parse(globalThis.atob(padded)) as { role?: unknown };
-    return typeof decoded.role === 'string' ? decoded.role : undefined;
+    const decoded: unknown = JSON.parse(globalThis.atob(padded));
+
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+      return undefined;
+    }
+
+    const role = (decoded as { role?: unknown }).role;
+    return typeof role === 'string' ? role : undefined;
   } catch {
     return undefined;
   }
@@ -108,7 +95,7 @@ export function getSupabaseClient(): SupabaseClient {
 
   client = createClient(url, publishableKey, {
     auth: {
-      storage: AsyncStorage,
+      storage: supabaseAuthStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

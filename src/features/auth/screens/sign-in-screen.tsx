@@ -10,6 +10,8 @@ export default function SignInScreen() {
   const auth = useAuth();
   const configurationError =
     auth.status === 'unauthenticated' ? auth.configurationError : undefined;
+  const initializationError =
+    auth.status === 'unauthenticated' ? auth.initializationError : undefined;
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
@@ -41,7 +43,10 @@ export default function SignInScreen() {
           </View>
 
           <View className="gap-2.5">
-            <SignInForm configurationError={configurationError} />
+            <SignInForm
+              configurationError={configurationError}
+              initializationError={initializationError}
+            />
             <Button mode="text" onPress={() => router.replace('/')}>
               Continue without signing in
             </Button>

@@ -4,17 +4,26 @@ import { usePasswordSignIn } from '@/features/auth/hooks/use-password-sign-in';
 
 type SignInFormProps = {
   configurationError?: string;
+  initializationError?: string;
 };
 
-export function SignInForm({ configurationError }: SignInFormProps) {
+export function SignInForm({
+  configurationError,
+  initializationError,
+}: SignInFormProps) {
   const theme = useTheme();
   const request = usePasswordSignIn(Boolean(configurationError));
   const feedback = configurationError
     ? configurationError
-    : request.state.status === 'error' || request.state.status === 'success'
-      ? request.state.message
-      : undefined;
-  const hasError = Boolean(configurationError) || request.state.status === 'error';
+    : initializationError
+      ? initializationError
+      : request.state.status === 'error' || request.state.status === 'success'
+        ? request.state.message
+        : undefined;
+  const hasError =
+    Boolean(configurationError) ||
+    Boolean(initializationError) ||
+    request.state.status === 'error';
 
   return (
     <>
