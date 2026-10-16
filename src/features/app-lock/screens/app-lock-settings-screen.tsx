@@ -1,8 +1,15 @@
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons';
 import { router } from 'expo-router';
 import { AccessibilityInfo, Pressable, ScrollView, useColorScheme, View } from 'react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Button, HelperText, Switch, Text } from 'react-native-paper';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Button,
+  HelperText,
+  IconButton,
+  Switch,
+  Text,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -37,7 +44,7 @@ function failureMessage(result: AppLockActionFailure) {
     case 'blocked':
       return 'Too many incorrect attempts. Unlock the app again after the wait.';
     case 'biometric-unavailable':
-      return 'Fingerprint or face unlock is not available on this device.';
+      return 'Fingerprint unlock is not available on this device.';
     case 'authentication-failed':
       return 'Device authentication was not completed. No setting was changed.';
     case 'busy':
@@ -136,24 +143,23 @@ export default function AppLockSettingsScreen() {
     };
   }, [getBiometricCapability, lockEnabled]);
 
-  const biometricName = useMemo(() => {
-    if (!capability?.kinds.length) return 'Biometric unlock';
-    const labels = capability.kinds.map((kind) => {
-      if (kind === 'face') return 'Face unlock';
-      if (kind === 'iris') return 'Iris unlock';
-      return 'Fingerprint unlock';
-    });
-    return labels.join(' or ');
-  }, [capability]);
+  const biometricName = 'Fingerprint unlock';
+
+  const announcePinError = useCallback(
+    (nextMessage: string) => {
+      announce(nextMessage, true);
+      setTimeout(() => pinRef.current?.focus(), 0);
+    },
+    [announce],
+  );
 
   const validatePin = useCallback(
     (value: string, label: string) => {
       if (value.length === APP_LOCK_PIN_LENGTH) return true;
-      announce(`${label} must be exactly ${APP_LOCK_PIN_LENGTH} digits.`, true);
-      pinRef.current?.focus();
+      announcePinError(`${label} must be exactly ${APP_LOCK_PIN_LENGTH} digits.`);
       return false;
     },
-    [announce],
+    [announcePinError],
   );
 
   const finishAtManagement = useCallback(
@@ -179,14 +185,13 @@ export default function AppLockSettingsScreen() {
     if (mode === 'confirm-create') {
       if (!validatePin(confirmation, 'PIN confirmation')) return;
       if (confirmation !== nextPin) {
-        announce('The PIN confirmation does not match.', true);
+        announcePinError('The PIN confirmation does not match. Try again.');
         setConfirmation('');
-        pinRef.current?.focus();
         return;
       }
       const result = await enable(nextPin);
       if (result.ok) finishAtManagement('App lock is now on.');
-      else announce(failureMessage(result), true);
+      else announcePinError(failureMessage(result));
       return;
     }
 
@@ -209,14 +214,13 @@ export default function AppLockSettingsScreen() {
     if (mode === 'confirm-change') {
       if (!validatePin(confirmation, 'PIN confirmation')) return;
       if (confirmation !== nextPin) {
-        announce('The PIN confirmation does not match.', true);
+        announcePinError('The PIN confirmation does not match. Try again.');
         setConfirmation('');
-        pinRef.current?.focus();
         return;
       }
       const result = await changePin(currentPin, nextPin);
       if (result.ok) finishAtManagement('Your app PIN was changed.');
-      else announce(failureMessage(result), true);
+      else announcePinError(failureMessage(result));
       return;
     }
 
@@ -229,7 +233,7 @@ export default function AppLockSettingsScreen() {
             ? `${biometricName} is now on.`
             : 'Biometric unlock is now off.',
         );
-      } else announce(failureMessage(result), true);
+      } else announcePinError(failureMessage(result));
       return;
     }
 
@@ -239,7 +243,7 @@ export default function AppLockSettingsScreen() {
       if (result.ok) {
         AccessibilityInfo.announceForAccessibility('App lock is now off.');
         router.back();
-      } else announce(failureMessage(result), true);
+      } else announcePinError(failureMessage(result));
       return;
     }
 
@@ -254,20 +258,20 @@ export default function AppLockSettingsScreen() {
     if (mode === 'recovery-confirm') {
       if (!validatePin(confirmation, 'PIN confirmation')) return;
       if (confirmation !== nextPin) {
-        announce('The PIN confirmation does not match.', true);
+        announcePinError('The PIN confirmation does not match. Try again.');
         setConfirmation('');
-        pinRef.current?.focus();
         return;
       }
       const result = await recoverPin(nextPin);
       if (result.ok) finishAtManagement('Your app PIN was reset.');
       else {
-        announce(failureMessage(result), true);
+        announcePinError(failureMessage(result));
         if (result.reason === 'recovery-not-authorized') setMode('manage');
       }
     }
   }, [
     announce,
+    announcePinError,
     biometricName,
     biometricTarget,
     changePin,
@@ -316,8 +320,7 @@ export default function AppLockSettingsScreen() {
     return null;
   }
 
-  const pinStep =
-    mode === 'manage' ? null : getPinStep(mode, biometricName, biometricTarget);
+  const pinStep = mode === 'manage' ? null : getPinStep(mode, biometricTarget);
   const pinValue =
     mode === 'create' || mode === 'change-new' || mode === 'recovery-new'
       ? nextPin
@@ -337,16 +340,21 @@ export default function AppLockSettingsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#f8f3e8] dark:bg-[#171812]">
-      <View className="flex-row items-center justify-between px-[18px] py-3">
-        <Button mode="text" onPress={goBack}>
-          Back
-        </Button>
+      <View className="relative h-14 flex-row items-center justify-center px-3">
+        <IconButton
+          accessibilityLabel="Back"
+          className="absolute left-1"
+          disabled={isBusy}
+          icon="chevron-left"
+          iconColor={dark ? '#cbd3a4' : '#59603f'}
+          onPress={goBack}
+          size={30}
+        />
         <Text
           accessibilityRole="header"
-          className="text-xl font-bold text-[#282923] dark:text-[#f4efe4]">
+          className="text-2xl font-bold text-[#111827] dark:text-[#f4efe4]">
           App lock
         </Text>
-        <View className="w-[68px]" />
       </View>
 
       <ScrollView
@@ -355,22 +363,52 @@ export default function AppLockSettingsScreen() {
         keyboardShouldPersistTaps="handled">
         {mode === 'manage' ? (
           <>
-            <View className="rounded-3xl bg-[#e4e5d5] p-5 dark:bg-[#303226]">
-              <Text className="text-xs font-bold uppercase tracking-[1.5px] text-[#59603f] dark:text-[#cbd3a4]">
-                Security
-              </Text>
-              <Text className="mt-2 text-[#282923] dark:text-[#f6f0df]" variant="headlineSmall">
-                App lock is on
-              </Text>
-              <Text className="mt-2 text-sm leading-5 text-[#747468] dark:text-[#c9c9b8]">
-                Prayer Bank asks for your PIN when you return to the app.
-              </Text>
+            <View className="flex-row items-center gap-4 rounded-3xl bg-[#e4e5d5] p-5 dark:bg-[#303226]">
+              <View className="h-14 w-14 items-center justify-center rounded-full bg-[#d4d8bd] dark:bg-[#3a3d2d]">
+                <MaterialDesignIcons
+                  color={dark ? '#cbd3a4' : '#59603f'}
+                  name="lock"
+                  size={28}
+                />
+              </View>
+              <View className="min-w-0 flex-1">
+                <Text className="font-bold text-[#111827] dark:text-[#f6f0df]" variant="titleLarge">
+                  App lock is on
+                </Text>
+                <Text className="mt-1 text-sm leading-5 text-[#676b7b] dark:text-[#c9c9b8]">
+                  Prayer Bank asks for your PIN when you return to the app.
+                </Text>
+              </View>
             </View>
 
-            <Text className="mb-2 mt-8 px-1 text-xs font-bold uppercase tracking-[1.5px] text-[#59603f] dark:text-[#cbd3a4]">
-              Unlock options
+            {message ? (
+              <View
+                accessibilityLiveRegion={messageIsError ? 'assertive' : 'polite'}
+                className={`mt-3 flex-row items-center gap-3 rounded-2xl px-4 py-3 ${
+                  messageIsError
+                    ? 'bg-[#f6e0dc] dark:bg-[#492d2a]'
+                    : 'bg-[#e4e5d5] dark:bg-[#303226]'
+                }`}>
+                <MaterialDesignIcons
+                  color={messageIsError ? (dark ? '#efb2a8' : '#9a594e') : dark ? '#cbd3a4' : '#59603f'}
+                  name={messageIsError ? 'alert-circle-outline' : 'check-circle'}
+                  size={22}
+                />
+                <Text
+                  className={`min-w-0 flex-1 font-medium ${
+                    messageIsError
+                      ? 'text-[#8e493f] dark:text-[#efb2a8]'
+                      : 'text-[#4f5637] dark:text-[#dce4b7]'
+                  }`}>
+                  {message}
+                </Text>
+              </View>
+            ) : null}
+
+            <Text className="mb-3 mt-8 text-xl font-bold text-[#111827] dark:text-[#f6f0df]">
+              Unlock method
             </Text>
-            <View className="overflow-hidden rounded-2xl border border-[#ddd6c8] bg-[#fffaf0] dark:border-[#45463a] dark:bg-[#24251d]">
+            <View className="rounded-2xl border border-[#ddd6c8] bg-[#fffaf0] dark:border-[#45463a] dark:bg-[#24251d]">
               <View className="min-h-[76px] flex-row items-center gap-4 px-4 py-3">
                 <View className="h-10 w-10 items-center justify-center rounded-full bg-[#e4e5d5] dark:bg-[#3a3d2d]">
                   <MaterialDesignIcons
@@ -387,8 +425,10 @@ export default function AppLockSettingsScreen() {
                     {capabilityLoading
                       ? 'Checking this device…'
                       : capability?.available
-                        ? 'Use biometrics with your PIN as fallback.'
-                        : 'No supported, enrolled biometrics were found.'}
+                        ? 'Use fingerprint unlock with your PIN as fallback.'
+                        : biometricEnabled
+                          ? 'Fingerprint unlock is on, but availability could not be confirmed.'
+                          : 'No enrolled fingerprint was found on this device.'}
                   </Text>
                 </View>
                 {capabilityLoading ? (
@@ -403,24 +443,33 @@ export default function AppLockSettingsScreen() {
                 ) : null}
               </View>
 
-              <View className="mx-4 h-px bg-[#ddd6c8] dark:bg-[#45463a]" />
+            </View>
+
+            <Text className="mb-3 mt-8 text-xl font-bold text-[#111827] dark:text-[#f6f0df]">
+              PIN security
+            </Text>
+            <View className="overflow-hidden rounded-2xl border border-[#ddd6c8] bg-[#fffaf0] dark:border-[#45463a] dark:bg-[#24251d]">
               <ActionRow
                 description="Choose a new four-digit PIN."
+                disabled={isBusy}
                 icon="dialpad"
                 onPress={() => openMode('change-current')}
                 title="Change PIN"
               />
               <View className="mx-4 h-px bg-[#ddd6c8] dark:bg-[#45463a]" />
               <ActionRow
-                description="Reset your PIN after confirming your device identity."
+                description="Confirm with device security, then choose a new PIN."
+                disabled={isBusy}
                 icon="lock-reset"
                 onPress={() => void beginRecovery()}
-                title="Forgot PIN?"
+                title="Reset PIN"
               />
             </View>
 
             <Button
               className="mt-6 min-h-12 justify-center"
+              disabled={isBusy}
+              icon="delete-outline"
               mode="outlined"
               textColor="#9a594e"
               onPress={() => openMode('disable')}>
@@ -428,24 +477,35 @@ export default function AppLockSettingsScreen() {
             </Button>
           </>
         ) : (
-          <View className="flex-1">
-            <View className="items-center pt-6">
+          <View className="w-full max-w-md">
+            <View className="pt-6">
               <Text className="text-xs font-bold uppercase tracking-[1.5px] text-[#59603f] dark:text-[#cbd3a4]">
-                Security
+                {pinStep!.progressLabel}
               </Text>
-              <Text className="mt-3 text-center text-[#282923] dark:text-[#f6f0df]" variant="headlineSmall">
+              <Text className="mt-3 text-[#111827] dark:text-[#f6f0df]" variant="headlineMedium">
                 {pinStep!.title}
               </Text>
-              <Text className="mt-2 max-w-sm text-center text-base leading-6 text-[#747468] dark:text-[#c9c9b8]">
+              <Text className="mt-2 max-w-sm text-base leading-6 text-[#676b7b] dark:text-[#c9c9b8]">
                 {pinStep!.description}
               </Text>
             </View>
 
-            <View className="mt-8">
+            {mode === 'disable' ? (
+              <View className="mt-6 rounded-2xl bg-[#f5ead2] px-4 py-4 dark:bg-[#403929]">
+                <Text className="leading-6 text-[#394150] dark:text-[#eee5cf]">
+                  Your saved prayers stay protected by your account. You can turn app lock on again anytime.
+                </Text>
+              </View>
+            ) : null}
+
+            <View className="mt-8 max-w-sm">
               <PinCodeInput
                 accessibilityLabel={pinStep!.accessibilityLabel}
                 autoFocus
+                disabled={isBusy}
+                errorMessage={messageIsError ? message : undefined}
                 inputRef={pinRef}
+                invalid={messageIsError}
                 label={pinStep!.label}
                 onChangeText={(value) => {
                   setPinValue(value);
@@ -456,41 +516,39 @@ export default function AppLockSettingsScreen() {
               />
             </View>
 
-            <HelperText
-              accessibilityLiveRegion={messageIsError ? 'assertive' : 'polite'}
-              className="mt-3 text-center"
-              type={messageIsError ? 'error' : 'info'}
-              visible={Boolean(message)}>
-              {message}
-            </HelperText>
+            {!messageIsError && message ? (
+              <HelperText accessibilityLiveRegion="polite" className="mt-3 px-0" type="info" visible>
+                {message}
+              </HelperText>
+            ) : null}
+
+            {mode === 'disable' ? (
+              <Button
+                className="mt-4 min-h-12 justify-center"
+                disabled={isBusy}
+                mode="outlined"
+                onPress={goBack}>
+                Keep app lock
+              </Button>
+            ) : null}
 
             <Button
-              className="mt-4 min-h-12 justify-center"
+              buttonColor={mode === 'disable' ? '#a63d3d' : undefined}
+              className={`${mode === 'disable' ? 'mt-3' : 'mt-4'} min-h-12 justify-center`}
               disabled={isBusy}
               loading={isBusy}
-              mode={mode === 'disable' ? 'outlined' : 'contained'}
-              textColor={mode === 'disable' ? '#9a594e' : undefined}
+              mode="contained"
               onPress={() => void continuePinFlow()}>
-              {pinStep!.buttonLabel}
+              {isBusy ? pinStep!.busyLabel : pinStep!.buttonLabel}
             </Button>
 
             {mode === 'create' ? (
-              <Text className="mx-auto mt-6 max-w-sm text-center text-xs leading-5 text-[#747468] dark:text-[#c9c9b8]">
+              <Text className="mt-6 max-w-sm text-xs leading-5 text-[#676b7b] dark:text-[#c9c9b8]">
                 This PIN is separate from your Prayer Bank account password.
               </Text>
             ) : null}
           </View>
         )}
-
-        {mode === 'manage' && message ? (
-          <HelperText
-            accessibilityLiveRegion={messageIsError ? 'assertive' : 'polite'}
-            className="mt-3 text-center"
-            type={messageIsError ? 'error' : 'info'}
-            visible>
-            {message}
-          </HelperText>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -498,11 +556,13 @@ export default function AppLockSettingsScreen() {
 
 function ActionRow({
   description,
+  disabled,
   icon,
   onPress,
   title,
 }: {
   description: string;
+  disabled?: boolean;
   icon: 'dialpad' | 'lock-reset';
   onPress: () => void;
   title: string;
@@ -513,7 +573,11 @@ function ActionRow({
   return (
     <Pressable
       accessibilityRole="button"
-      className="min-h-[76px] flex-row items-center gap-4 px-4 py-3 active:bg-[#f1ebde] dark:active:bg-[#303226]"
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      className={`min-h-[76px] flex-row items-center gap-4 px-4 py-3 active:bg-[#f1ebde] dark:active:bg-[#303226] ${
+        disabled ? 'opacity-50' : ''
+      }`}
+      disabled={disabled}
       onPress={onPress}>
       <View className="h-10 w-10 items-center justify-center rounded-full bg-[#e4e5d5] dark:bg-[#3a3d2d]">
         <MaterialDesignIcons
@@ -528,89 +592,110 @@ function ActionRow({
           {description}
         </Text>
       </View>
-      <Text className="text-2xl text-[#9b9a8d] dark:text-[#8f907f]">›</Text>
+      <MaterialDesignIcons
+        color={dark ? '#8f907f' : '#747468'}
+        name="chevron-right"
+        size={24}
+      />
     </Pressable>
   );
 }
 
 function getPinStep(
   mode: Exclude<ScreenMode, 'manage'>,
-  biometricName: string,
   biometricTarget: boolean,
 ) {
   switch (mode) {
     case 'create':
       return {
         accessibilityLabel: 'New four-digit app PIN',
+        busyLabel: 'Please wait…',
         buttonLabel: 'Continue',
         description: 'Enter four digits to protect Prayer Bank on this device.',
         label: 'New PIN',
+        progressLabel: 'Step 1 of 2',
         title: 'Create your PIN',
       };
     case 'confirm-create':
       return {
         accessibilityLabel: 'Confirm four-digit app PIN',
+        busyLabel: 'Turning on…',
         buttonLabel: 'Turn on app lock',
         description: 'Enter the same four digits again.',
         label: 'Confirm PIN',
+        progressLabel: 'Step 2 of 2',
         title: 'Confirm your PIN',
       };
     case 'change-current':
       return {
         accessibilityLabel: 'Current four-digit app PIN',
+        busyLabel: 'Please wait…',
         buttonLabel: 'Continue',
         description: 'Confirm your current PIN before choosing a new one.',
         label: 'Current PIN',
+        progressLabel: 'Step 1 of 3',
         title: 'Enter your current PIN',
       };
     case 'change-new':
       return {
         accessibilityLabel: 'New four-digit app PIN',
+        busyLabel: 'Please wait…',
         buttonLabel: 'Continue',
-        description: 'Choose four new digits for App Lock.',
+        description: 'Use four digits you can remember but others cannot guess.',
         label: 'New PIN',
+        progressLabel: 'Step 2 of 3',
         title: 'Choose a new PIN',
       };
     case 'confirm-change':
       return {
         accessibilityLabel: 'Confirm new four-digit app PIN',
+        busyLabel: 'Saving…',
         buttonLabel: 'Save new PIN',
         description: 'Enter the same four digits again.',
         label: 'Confirm PIN',
+        progressLabel: 'Step 3 of 3',
         title: 'Confirm your new PIN',
       };
     case 'biometric':
       return {
         accessibilityLabel: 'Current four-digit app PIN',
+        busyLabel: 'Updating…',
         buttonLabel: biometricTarget ? 'Continue' : 'Turn off',
         description: biometricTarget
-          ? `Enter your PIN, then complete the ${biometricName.toLowerCase()} prompt.`
-          : 'Enter your PIN to turn off biometric unlock.',
+          ? 'Enter your current PIN. Next, confirm with fingerprint unlock.'
+          : 'Enter your current PIN to turn off fingerprint unlock.',
         label: 'Current PIN',
-        title: biometricTarget ? `Turn on ${biometricName}` : 'Turn off biometric unlock',
+        progressLabel: 'Security check',
+        title: 'Confirm your PIN',
       };
     case 'disable':
       return {
         accessibilityLabel: 'Current four-digit app PIN',
+        busyLabel: 'Turning off…',
         buttonLabel: 'Turn off app lock',
-        description: 'Enter your PIN to remove App Lock from this device.',
+        description: 'Enter your PIN to stop requiring app lock on this device.',
         label: 'Current PIN',
-        title: 'Turn off app lock',
+        progressLabel: 'Security check',
+        title: 'Turn off app lock?',
       };
     case 'recovery-new':
       return {
         accessibilityLabel: 'New four-digit app PIN',
+        busyLabel: 'Please wait…',
         buttonLabel: 'Continue',
-        description: 'Your device identity was confirmed. Choose a replacement PIN.',
+        description: 'Create four new digits for app lock.',
         label: 'New PIN',
+        progressLabel: 'Identity confirmed',
         title: 'Choose a new PIN',
       };
     case 'recovery-confirm':
       return {
         accessibilityLabel: 'Confirm replacement four-digit app PIN',
+        busyLabel: 'Saving…',
         buttonLabel: 'Save new PIN',
         description: 'Enter the same four digits again.',
         label: 'Confirm PIN',
+        progressLabel: 'Step 2 of 2',
         title: 'Confirm your new PIN',
       };
   }
